@@ -1,2 +1,2 @@
 # drive-control
-A drive control algorithm for Dartmouth Formula Racing.
+A drive control algorithm for Dartmouth Formula Racing that takes into account dynamic vehicle state and battery management.
