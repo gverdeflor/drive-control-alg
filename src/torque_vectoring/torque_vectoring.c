@@ -49,7 +49,7 @@ double calculateDesiredYawRate(double steeringAngle, double velocityCG) {
  * 
  * desiredYawRate: desired yaw rate based on driver input (steering angle sensor + vehicle speed)
  * currentYawRate: current yaw rate of the vehicle - from vehicle dynamics module (VDM)
- * returns: difference between the desired rate and teh current rate
+ * returns: difference between the desired rate and the current rate
  */
 double calculateYawError(double desiredYawRate, double currentYawRate) {
     double yawError = desiredYawRate - currentYawRate;
