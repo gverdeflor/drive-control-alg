@@ -6,8 +6,15 @@
 #include "../CuTest.h"
 
 void calculateTorqueRequestTest(CuTest* tc) {
-    CuAssertDblEquals(tc, 1.0, 1.0, 0.0);
+    CuAssertDblEquals(tc, 2.0, 1.0, 1.5);
 }
+
+void garthTest(CuTest* tc) {
+    CuAssertIntEquals(tc, 2.0, calculateTorqueRequest(), 1.4);
+}
+
+
+// ---------------------------Torque Request Tests--------------------------------- //
 
 CuSuite* TVGetSuite(void) {
     CuSuite* suite = CuSuiteNew();
@@ -16,3 +23,4 @@ CuSuite* TVGetSuite(void) {
 
     return suite;
 }
+

@@ -14,12 +14,6 @@
 #define minReasonableLapDistance 5000   // UPDATE
 #define maxReasonableLapDistance 10000 // UPDATE
 
-
-#define l_r         .70 // m (meters)
-#define l_f         1.05 // m (meters)
-#define K_u         -.06902 // K constant
-
-
 int helper_func(int returnval) {
     return returnval;
 }
@@ -34,8 +28,10 @@ int helper_func(int returnval) {
  * 
  * returns: true if it passes safety check, false if not
  */
+
+// ADD TEMPERATURE HERE
 double GLVSSafetyCheck(double currentVoltage, double currentTemperature) {
-    if ((minAcceptableVoltage <= currentVoltage <= maxAcceptableVoltage)) {
+    if ((minAcceptableVoltage <= currentVoltage <= maxAcceptableVoltage)) { 
         return true;
     } else {
         return false;
@@ -103,7 +99,7 @@ double calculateDistanceTraveled(double rearWheelSpeed, double currentLapTime) {
  * 
  * returns: true if the lap has been finished, false if the lap has not been finished
  */
-bool finishedLap(currentLatitude, currentLongitude, currentSpeed, currentLapDistance) {
+bool finishedLap(double currentLatitude, double currentLongitude, double currentSpeed, double currentLapDistance) {
     if ((minLapSpeed <= currentSpeed <= maxLapSpeed) && (minLatitude <= currentLatitude <= maxLatitude)
         && (minLongitude <= currentLongitude <= maxLongitude) && (minReasonableLapDistance <= currentLapDistance <= maxReasonableLapDistance)) {
             return true;
@@ -122,7 +118,7 @@ bool finishedLap(currentLatitude, currentLongitude, currentSpeed, currentLapDist
  * 
  * returns: the current energy consumption rate
  */
-double calculateEnergyConsumptionOffset(estimatedEnergyConsumption, perLapCurrentEnergyConsumption) {
+double calculateEnergyConsumptionOffset(double estimatedEnergyConsumption, double perLapCurrentEnergyConsumption) {
     double perLapEnergyOffset = estimatedEnergyConsumption - perLapCurrentEnergyConsumption;
     return perLapEnergyOffset;
 }
