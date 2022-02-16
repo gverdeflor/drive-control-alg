@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <math.h>
+#include "torque_vectoring.h"
 
 #define maxTorque   180         // Nm (Newton * meters)
 #define l_r         .70         // m (meters)
@@ -16,19 +17,6 @@
 #define G           5.6         // constant
 #define L           1.75        // m (meters)
 
-struct ForceZ {
-    double F_zrl;
-    double F_zrr;
-};
-
-struct TMax {
-    double TMax_rl;
-    double TMax_rr;
-};
-
-
-typedef struct ForceZ ForceZStruct;
-typedef struct TMax TMaxStruct;
 
 int helper_func(int returnval) {
     return returnval;

@@ -2,8 +2,11 @@
 #include <math.h>
 #include <stdbool.h>
 
-#define minAcceptableVoltage   0    // UPDATE -- V (volts)
-#define maxAcceptableVoltage 10     // UPDATE -- V (volts)
+#define minAcceptableVoltage   0.0    // UPDATE -- V (volts)
+#define maxAcceptableVoltage 10.0     // UPDATE -- V (volts)
+#define minAcceptableTemperature 0.0     // UPDATE -- V (volts)
+#define maxAcceptableTemperature 10.0     // UPDATE -- V (volts)
+
 #define wheelDiameter 5             // UPDATE
 #define minLapSpeed 5               // UPDATE
 #define maxLapSpeed 10              // UPDATE
@@ -28,10 +31,8 @@ int helper_func(int returnval) {
  * 
  * returns: true if it passes safety check, false if not
  */
-
-// ADD TEMPERATURE HERE
-double GLVSSafetyCheck(double currentVoltage, double currentTemperature) {
-    if ((minAcceptableVoltage <= currentVoltage <= maxAcceptableVoltage)) { 
+bool GLVSSafetyCheck(double currentVoltage, double currentTemperature) {
+    if (((minAcceptableVoltage <= currentVoltage) && (currentVoltage <= maxAcceptableVoltage)) && ((minAcceptableTemperature <= currentTemperature) && (currentTemperature <= maxAcceptableTemperature))) { 
         return true;
     } else {
         return false;
@@ -100,8 +101,8 @@ double calculateDistanceTraveled(double rearWheelSpeed, double currentLapTime) {
  * returns: true if the lap has been finished, false if the lap has not been finished
  */
 bool finishedLap(double currentLatitude, double currentLongitude, double currentSpeed, double currentLapDistance) {
-    if ((minLapSpeed <= currentSpeed <= maxLapSpeed) && (minLatitude <= currentLatitude <= maxLatitude)
-        && (minLongitude <= currentLongitude <= maxLongitude) && (minReasonableLapDistance <= currentLapDistance <= maxReasonableLapDistance)) {
+    if (((minLapSpeed <= currentSpeed) && (currentSpeed <= maxLapSpeed)) && ((minLatitude <= currentLatitude) && (currentLatitude <= maxLatitude))
+        && ((minLongitude <= currentLongitude) && (currentLongitude <= maxLongitude)) && ((minReasonableLapDistance <= currentLapDistance) && (currentLapDistance <= maxReasonableLapDistance))) {
             return true;
         } else {
             return false;

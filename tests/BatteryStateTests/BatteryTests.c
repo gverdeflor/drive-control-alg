@@ -1,18 +1,34 @@
 #include <stdlib.h>
-// #include <check.h>
 #include <stdio.h>
 #include <math.h>
-#include "../../src/torque_vectoring/torque_vectoring.h"
+#include "../../src/battery_state/battery_state.h"
 #include "../CuTest.h"
 
-void calculateTorqueRequestTest(CuTest* tc) {
-    CuAssertDblEquals(tc, 1.0, 1.0, 0.0);
+bool GLVSSafetyCheck(double currentVoltage, double currentTemperature);
+
+// ------------------------------ GLVSSafetyCheck Tests ------------------------------ //
+void GLVSSafetyCheckTest(CuTest* tc) {
+    double currentVoltage = 5.0;
+    double currentTemperature = 5.0;
+    CuAssertTrue(tc, GLVSSafetyCheck(currentVoltage, currentTemperature));
+
+    currentVoltage = 21.0;
+    CuAssertTrue(tc, !GLVSSafetyCheck(currentVoltage, currentTemperature));
+    
+    currentTemperature = 21.0;
+    CuAssertTrue(tc, !GLVSSafetyCheck(currentVoltage, currentTemperature));
+
+    currentVoltage = 5.0;
+    CuAssertTrue(tc, !GLVSSafetyCheck(currentVoltage, currentTemperature));
+
+    currentTemperature = 7.0;
+    CuAssertTrue(tc, GLVSSafetyCheck(currentVoltage, currentTemperature));
 }
 
 CuSuite* BatteryGetSuite(void) {
     CuSuite* suite = CuSuiteNew();
 
-    SUITE_ADD_TEST(suite, calculateTorqueRequestTest);
+    SUITE_ADD_TEST(suite, GLVSSafetyCheckTest);
 
     return suite;
 }
