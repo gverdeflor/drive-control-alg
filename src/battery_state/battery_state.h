@@ -35,6 +35,6 @@ bool finishedLap(double currLatitude, double currLongitude, double currSpeed, do
 /* 
  * calculates energy consumption offset based on estimated energy consumption and per lap energy consumption
  */
-bool calcEnergyConsumptionError(double estimatedEnergyConsumption, double perLapCurrEnergyConsumption);
+double calcEnergyConsumptionError(double estimatedEnergyConsumption, double perLapCurrEnergyConsumption);
 
 
