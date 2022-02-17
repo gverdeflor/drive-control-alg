@@ -9,10 +9,6 @@ void calculateTorqueRequestTest(CuTest* tc) {
     CuAssertDblEquals(tc, 2.0, 1.0, 1.5);
 }
 
-void garthTest(CuTest* tc) {
-    CuAssertIntEquals(tc, 2.0, calculateTorqueRequest(), 1.4);
-}
-
 
 // ---------------------------Torque Request Tests--------------------------------- //
 

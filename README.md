@@ -8,4 +8,4 @@ Suraj - Added CuTest capabilities for the repo as well as Makefiles and folder s
 Suraj - Rewrote Makefile for Battery State Tests to hold all the proper linking information. Wrote tests for GLVSSafetyCheck and made corrections to the function.
 
 2/16/22
-Suraj - Wrote unit tests for existing battery state algorithm components.
+Suraj - Wrote unit tests for existing battery state algorithm components. Rewrote Makefile for TV to include same structure as Battery State Tests and properly link in math and other libraries.
