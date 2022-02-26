@@ -2,20 +2,29 @@
 #include <math.h>
 #include "torque_vectoring.h"
 
-#define maxTorque   180         // Nm (Newton * meters)
-#define l_r         .70         // m (meters)
-#define l_f         1.05        // m (meters)
-#define K_u         -.06902     // K constant
-#define t_f         .75         // m (meters)
-#define F_yfl       7           // UPDATE
-#define F_yfr       7           // UPDATE
-#define t_r         .7          // m (meters)
-#define F_xrr       7           // m (meters)
-#define F_xrl       7           // m (meters)
-#define r           .28575      // cm
-#define mu          1.7         // constant
-#define G           5.6         // constant
-#define L           1.75        // m (meters)
+#define maxTorque   178         // Nm (Newton * meters) - motor datasheet (89 from each motor)
+#define carWeight   .6          // percent weight in the rear (estimated)
+#define L           1.75        // m (meters) - wheel base to wheel base length
+#define l_r         (1 - carWeight) * L         // m (meters) - length from CG to rear
+#define l_f         (carWeight) * L        // m (meters) - length from CG to front
+#define mass        360         // 360 kg - estimated from previous car
+#define c_f         529         // N / deg (Newtons per degree) - cornerning stiffness (front) - estimated from similar SAE car --> needs to be converted to radians
+#define c_r         633         // N / deg (Newtons per degree) - cornering stiffness (rear) - estimated from similar SAE car --> needs to be converted to radians
+#define K_u         (l_r * mass / (c_f * L)) - (l_f * mass / (c_r * L))     // K constant
+#define t_f         1.35         // m (meters) - distance between two front wheels
+#define t_r         1.3          // m (meters) - distance between two rear wheels
+
+#define r           .28575      // m (meters) - wheel radius
+#define mu          1.7         // constant - coefficient of friction (for now)
+#define G           5.6         // constant - gear ratio between motor and wheel
+#define heightCG    .27         // m (meters) - height of center of gravity (off the ground)
+#define h_s         .28         // roll (?)
+#define K_r         570.0197    // roll stiffness rear
+#define K_f         546.4094    // roll stiffness front
+#define p_r         h_s * (K_r / (K_f * K_r))   // roll distribution rear (units?)
+#define p_r         h_s * (K_f / (K_f * K_r))   // roll distribution rear (units?)
+#define I_z         120         // Kg * (m) ^ 2 - moment of inertia in the z axis
+#define grav        9.82        // m / (s) ^ 2    // gravity
 
 
 int helper_func(int returnval) {
@@ -32,11 +41,14 @@ int helper_func(int returnval) {
  * returns: the requested torque as a percent of the maximum available torque
  */
 double calculateTorqueRequest(double throttlePosition) {
-    double requestedTorque = maxTorque * throttlePosition;
+    double requestedTorque = maxTorque * (throttlePosition / 100);
     return requestedTorque;
 }
 
-
+double calculateTurnRadius(double steeringAngle) {
+    double turnRadius = sqrt(pow(t_f/4, 2) + (pow(L, 2) * pow(1 / tan(steeringAngle),2)));
+    return turnRadius;
+}
 /*
  * Function: calculateDesiredYawRate
  * ---------------------------------
@@ -47,7 +59,15 @@ double calculateTorqueRequest(double throttlePosition) {
  * returns: desired yaw rate
  */
 double calculateDesiredYawRate(double steeringAngle, double velocityCG) {
-    double desiredYawRate = velocityCG * steeringAngle / ((l_r + l_f) + K_u * pow(velocityCG, 2));
+    double desiredYawRate;
+    double turnRadius = calculateTurnRadius(steeringAngle);
+
+    if (steeringAngle > 0) {
+        desiredYawRate = (velocityCG / turnRadius);
+    } else {
+        desiredYawRate = - (velocityCG / turnRadius);
+    }
+
     return desiredYawRate;
 }
 
@@ -75,24 +95,38 @@ double calculateYawError(double desiredYawRate, double currentYawRate) {
  * currentYawRate: current yaw rate of the vehicle - from vehicle dynamics module (VDM)
  * returns: difference between the desired rate and the current rate
  */
-double calculateDesiredYawMoment(double yawError, double steeringAngle) {
-    double desiredYawMoment = t_f * sin(steeringAngle) * (F_yfl - F_yfr) + t_r * (F_xrr - F_xrl);
+double calculateDesiredYawMoment(double yawError, double currentYawRate, double desiredYawRate, double previousYawRate, double steeringAngle, double velocityCG, double timestep) {
+    double sideSlipAngleCoeff = c_f * l_f - c_r * l_r;
+    double yawRateOverVxCoeff = c_f * pow(l_f, 2) + c_r * pow(l_f, 2);
+    double steeringAngleCoeff = c_f * l_f;
+    double eta = 1.1;
+
+    double turnRadius = calculateTurnRadius(steeringAngle);
+    double beta = 57.3 * l_r / turnRadius - r * pow(velocityCG, 2) / (K_r * grav * turnRadius);
+    double desiredYawRateDerivative = (desiredYawRate - previousYawRate) / timestep;
+
+    double derivTerm = I_z * desiredYawRateDerivative;
+    double sideslipTerm = sideSlipAngleCoeff * beta; // beta
+    double yawOverVxTerm = yawRateOverVxCoeff * currentYawRate / velocityCG;
+    double steeringAngleTerm = steeringAngleCoeff * steeringAngle; // radians
+    double yawErrorTerm = eta * I_z * yawError;
+
+    double desiredYawMoment = derivTerm + sideslipTerm + yawOverVxTerm - steeringAngle + yawErrorTerm;
+
     return desiredYawMoment;
 }
 
 
-
-// double calculateLateralForces(double yaw_rate, double velocityLongitude, double velocityLatitude, double steeringAngle) {
-//     F_yf = - C_f * 
-// }
-
 ForceZStruct calculateVerticalLoadWeightTransfer(double accelerationLongitude, double accelerationLatitude) {
-    // needs to be filled in
     ForceZStruct forces;
-    forces.F_zrl = 1;
-    forces.F_zrr = 1;
+    forces.F_zrl = (.5 * mass * grav * l_f / L) - (p_r * accelerationLatitude * mass * heightCG / L) + (.5 * accelerationLongitude * mass * heightCG / L);
+    forces.F_zrr = (.5 * mass * grav * l_f / L) + (p_r * accelerationLatitude * mass * heightCG / L) + (.5 * accelerationLongitude * mass * heightCG / L);
 
     return forces;
+}
+
+double calculateLateralForces(double yaw_rate, double velocityLongitude, double velocityLatitude, double steeringAngle) {
+    F_yf = - C_f * 
 }
 
 
