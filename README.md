@@ -9,3 +9,6 @@ Suraj - Rewrote Makefile for Battery State Tests to hold all the proper linking 
 
 2/16/22
 Suraj - Wrote unit tests for existing battery state algorithm components. Rewrote Makefile for TV to include same structure as Battery State Tests and properly link in math and other libraries.
+
+2/26/22
+Suraj - finished TV code + tests (menard + ashley v3)
