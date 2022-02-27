@@ -4,13 +4,15 @@
 typedef struct ForceZ {
     double F_zrl;
     double F_zrr;
+    double F_zfl;
+    double F_zfr;
 } ForceZStruct;
 
 typedef struct ForceY {
-    double F_zfr;
-    double F_zfl;
-    double F_zrr;
-    double F_zrl;
+    double F_yfr;
+    double F_yfl;
+    double F_yrr;
+    double F_yrl;
 } ForceYStruct;
 
 typedef struct TMax {
@@ -28,14 +30,18 @@ typedef struct NewTorque {
     double newTorqueRL;
 } NewTorqueStruct;
 
+double calculateTorqueRequest(double throttlePosition, double velocityCG);
+double calculateTurnRadius(double steeringAngle);
 
-int helper_func(int returnval);
-double calculateTorqueRequest(double throttlePosition);
 double calculateDesiredYawRate(double steeringAngle, double velocityCG);
 double calculateYawError(double desiredYawRate, double currentYawRate);
 
-double calculateDesiredYawMoment(double yawError, double steeringAngle);
-ForceZStruct calculateVerticalLoadWeightTransfer(double accelerationLongitude, double accelerationLatitude);
+double calculateDesiredYawMoment(double yawError, double currentYawRate, double desiredYawRate, double previousYawRate, double steeringAngle, double velocityCG, double timestep);
+double calculateTorqueDistributionDelta(double desiredYawMoment);
+DesiredTorqueStruct calculateDesiredTorque(double steeringAngle, double torqueRequest, double torqueDelta);
 
-TMaxStruct calculateTractionLimitTorque(double F_yrl, double F_yrr, double F_zrl, double F_zrr);
-double calculateTorqueDistributionDelta(double desiredYawMoment, double steeringAngle, double velocityCG);
+ForceZStruct calculateVerticalLoadWeightTransfer(double accelerationLongitude, double accelerationLatitude);
+ForceYStruct calculateLateralForces(double accelerationLatitude, ForceZStruct forcesZ);
+TMaxStruct calculateTractionLimitTorque(ForceYStruct forcesY, ForceZStruct forcesZ);
+
+NewTorqueStruct tractionLimitCheck(DesiredTorqueStruct desiredTorque, TMaxStruct tMaxes);

@@ -27,16 +27,14 @@
 #define grav        9.82        // m / (s) ^ 2    // gravity
 
 
-int helper_func(int returnval) {
-    return returnval;
-}
-
 /*
  * Function: calculateTorqueRequest
  * --------------------------------
  * calculates the torque request based on throttle position and max torque
+ * in the case that throttlePosition = 0, it does regen braking
  * 
- * throttlePosition: pedal compression % (from throttle position sensor)
+ * throttlePosition: pedal compression [0 - 100] (from throttle position sensor)
+ * velocityCG: GPS speed m/s from the VDM
  * 
  * returns: the requested torque as a percent of the maximum available torque
  */
@@ -72,8 +70,22 @@ double calculateTorqueRequest(double throttlePosition, double velocityCG) {
     return requestedTorque;
 }
 
+/*
+ * Function: calculateTurnRadius
+ * -----------------------------
+ * calculates the turn radius based on the steering angle
+ * 
+ * steeringAngle: from steering angle sensor
+ * returns: the calculated turn radius
+ */
 double calculateTurnRadius(double steeringAngle) {
-    double turnRadius = sqrt(pow(t_f/4, 2) + (pow(L, 2) * pow(1 / tan(steeringAngle),2)));
+    double turnRadius;
+    if (steeringAngle != 0) {
+        turnRadius = sqrt(pow(t_f/4, 2) + (pow(L, 2) * pow(1 / tan(steeringAngle), 2)));
+    } else {
+        turnRadius = sqrt(pow(t_f/4, 2) + (pow(L, 2) * pow(1 / tan(steeringAngle + .000001), 2)));
+    }
+
     return turnRadius;
 }
 
@@ -116,7 +128,7 @@ double calculateYawError(double desiredYawRate, double currentYawRate) {
 
 /*
  * Function: calculateDesiredYawMoment
- * ---------------------------
+ * -----------------------------------
  * calculates the yaw error based on the difference between the desired rate and the current rate
  * 
  * desiredYawRate: desired yaw rate based on driver input (steering angle sensor + vehicle speed)
@@ -139,18 +151,37 @@ double calculateDesiredYawMoment(double yawError, double currentYawRate, double 
     double steeringAngleTerm = steeringAngleCoeff * steeringAngle; // radians
     double yawErrorTerm = eta * I_z * yawError;
 
-    double desiredYawMoment = derivTerm + sideslipTerm + yawOverVxTerm - steeringAngle + yawErrorTerm;
+    double desiredYawMoment = derivTerm + sideslipTerm + yawOverVxTerm - steeringAngleTerm + yawErrorTerm;
 
     return desiredYawMoment;
 }
 
-
+/*
+ * Function: calculateTorqueDistributionDelta
+ * ------------------------------------------
+ * calculates the torque delta based off of the desired yaw moment
+ * 
+ * desiredYawMoment: from the calculateDesiredYawMoment function (double)
+ * 
+ * returns: torque delta
+ */
 double calculateTorqueDistributionDelta(double desiredYawMoment) {
     double torqueDelta = desiredYawMoment * r / (t_r * G);
 
     return torqueDelta;
 }
 
+/*
+ * Function: calculateDesiredTorque
+ * --------------------------------
+ * calculates the desired torque based off of the torque request, steering angle, and the torque delta
+ * 
+ * steeringAngle: from the SA Sensor
+ * torqueRequest: calculated by torque request function
+ * torqueDelta: calculated by torque distribution delta function
+ * 
+ * returns: desired torque
+ */
 DesiredTorqueStruct calculateDesiredTorque(double steeringAngle, double torqueRequest, double torqueDelta) {
     DesiredTorqueStruct desiredTorque;
     double desiredTorqueRR;
@@ -170,6 +201,16 @@ DesiredTorqueStruct calculateDesiredTorque(double steeringAngle, double torqueRe
     return desiredTorque;
 }
 
+/*
+ * Function: calculateVerticalLoadWeightTransfer
+ * ---------------------------------------------
+ * calculates the weight transfer of the vertical load
+ * 
+ * accelerationLongitude: from the VDM
+ * accelerationLatitude: from the VDM
+ * 
+ * returns: struct with the four z forces
+ */
 ForceZStruct calculateVerticalLoadWeightTransfer(double accelerationLongitude, double accelerationLatitude) {
     ForceZStruct forces;
     forces.F_zrl = (.5 * mass * grav * l_f / L) - (p_r * accelerationLatitude * mass * heightCG / t_r) + (.5 * accelerationLongitude * mass * heightCG / L);
@@ -181,42 +222,70 @@ ForceZStruct calculateVerticalLoadWeightTransfer(double accelerationLongitude, d
     return forces;
 }
 
+/*
+ * Function: calculateLateralForces
+ * --------------------------------
+ * calculates the lateral forces
+ * 
+ * accelerationLatitude: from the VDM
+ * forcesZ: from calculateVerticalLoadWeightTransfer method
+ * 
+ * returns: struct with the four y forces
+ */
 ForceYStruct calculateLateralForces(double accelerationLatitude, ForceZStruct forcesZ) {
     ForceYStruct forces;
-    force.F_yfr = (forcesZ.F_zfr / grav) * accelerationLatitude;
-    force.F_yfl = (forcesZ.F_zfl / grav) * accelerationLatitude;
-    force.F_yrr = (forcesZ.F_zrr / grav) * accelerationLatitude;
-    force.F_yrl = (forcesZ.F_zrl / grav) * accelerationLatitude;
+    forces.F_yfr = (forcesZ.F_zfr / grav) * accelerationLatitude;
+    forces.F_yfl = (forcesZ.F_zfl / grav) * accelerationLatitude;
+    forces.F_yrr = (forcesZ.F_zrr / grav) * accelerationLatitude;
+    forces.F_yrl = (forcesZ.F_zrl / grav) * accelerationLatitude;
 
     return forces;
 }
 
-
-TMaxStruct calculateTractionLimitTorque(ForceYStruct forcesY, ForceZStruct forcesZ) {
+/*
+ * Function: calculateTractionLimitTorque
+ * --------------------------------------
+ * calculates the traction limit torque
+ * 
+ * YForces: from the calculate lateral forces method
+ * ZForces: from the calculate vertical load weight transfer method
+ * 
+ * returns: struct with the max traction limit torques
+ */
+TMaxStruct calculateTractionLimitTorque(ForceYStruct YForces, ForceZStruct ZForces) {
     TMaxStruct tMaxes;
-    tMaxes.maxTorqueRL = (r * sqrt(pow(mu * forcesZ.F_zrl, 2.0) - forcesY.F_yrl)) / G;
-    tMaxes.maxTorqueRR = (r * sqrt(pow(mu * forcesZ.F_zrr, 2.0) - forcesY.F_yrr)) / G;
+    tMaxes.maxTorqueRL = (r * sqrt(pow(mu * ZForces.F_zrl, 2.0) - YForces.F_yrl)) / G;
+    tMaxes.maxTorqueRR = (r * sqrt(pow(mu * ZForces.F_zrr, 2.0) - YForces.F_yrr)) / G;
 
     return tMaxes;
 }
 
-
-double tractionLimitCheck(DesiredTorqueStruct desiredTorque, TMaxStruct tMaxes) {
+/*
+ * Function: tractionLimitCheckTest
+ * --------------------------------------
+ * calculates the traction limit torque
+ * 
+ * desiredTorque: desired torque struct from calculated desired torque from 
+ * tMaxes: max traction limit torques struct from traction limit torque method
+ * 
+ * returns: struct with the new torques
+ */
+NewTorqueStruct tractionLimitCheck(DesiredTorqueStruct desiredTorque, TMaxStruct tMaxes) {
     NewTorqueStruct newTorque;
     double newTorqueRR;
     double newTorqueRL;
     
-    if (tMaxes.maxTorqueRR > desiredTorque.desiredTorqueRR) && (tMaxes.maxTorqueRL > desiredTorque.desiredTorqueRL) {
+    if ((tMaxes.maxTorqueRR > desiredTorque.desiredTorqueRR) && (tMaxes.maxTorqueRL > desiredTorque.desiredTorqueRL)) {
         newTorqueRR = desiredTorque.desiredTorqueRR;
         newTorqueRL = desiredTorque.desiredTorqueRL;
     } else {
-        double TDiff = max(desiredTorque.desiredTorqueRR - tMaxes.maxTorqueRR, desiredTorque.desiredTorqueRL - tMaxes.maxTorqueRL);
+        double TDiff = fmax(desiredTorque.desiredTorqueRR - tMaxes.maxTorqueRR, desiredTorque.desiredTorqueRL - tMaxes.maxTorqueRL);
         newTorqueRR = desiredTorque.desiredTorqueRR - TDiff;
         newTorqueRL = desiredTorque.desiredTorqueRL - TDiff;
     }
 
-    if (newTorqueRR > (maxTorque / 2) || newTorqueRL > (maxTorque / 2)) {
-        double diff = max(newTorqueRR - maxTorque / 2, newTorqueRL - maxTorque / 2);
+    if ((newTorqueRR > (maxTorque / 2)) || (newTorqueRL > (maxTorque / 2))) {
+        double diff = fmax(newTorqueRR - maxTorque / 2, newTorqueRL - maxTorque / 2);
         newTorqueRR = newTorqueRR - diff;
         newTorqueRL = newTorqueRL - diff;
     }
