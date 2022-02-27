@@ -6,10 +6,27 @@ typedef struct ForceZ {
     double F_zrr;
 } ForceZStruct;
 
+typedef struct ForceY {
+    double F_zfr;
+    double F_zfl;
+    double F_zrr;
+    double F_zrl;
+} ForceYStruct;
+
 typedef struct TMax {
-    double TMax_rl;
-    double TMax_rr;
+    double maxTorqueRL;
+    double maxTorqueRR;
 } TMaxStruct;
+
+typedef struct DesiredTorque {
+    double desiredTorqueRR;
+    double desiredTorqueRL;
+} DesiredTorqueStruct;
+
+typedef struct NewTorque {
+    double newTorqueRR;
+    double newTorqueRL;
+} NewTorqueStruct;
 
 
 int helper_func(int returnval);

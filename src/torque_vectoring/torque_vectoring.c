@@ -22,7 +22,7 @@
 #define K_r         570.0197    // roll stiffness rear
 #define K_f         546.4094    // roll stiffness front
 #define p_r         h_s * (K_r / (K_f * K_r))   // roll distribution rear (units?)
-#define p_r         h_s * (K_f / (K_f * K_r))   // roll distribution rear (units?)
+#define p_f         h_s * (K_f / (K_f * K_r))   // roll distribution rear (units?)
 #define I_z         120         // Kg * (m) ^ 2 - moment of inertia in the z axis
 #define grav        9.82        // m / (s) ^ 2    // gravity
 
@@ -40,8 +40,35 @@ int helper_func(int returnval) {
  * 
  * returns: the requested torque as a percent of the maximum available torque
  */
-double calculateTorqueRequest(double throttlePosition) {
-    double requestedTorque = maxTorque * (throttlePosition / 100);
+double calculateTorqueRequest(double throttlePosition, double velocityCG) {
+    double requestedTorque;
+    requestedTorque = maxTorque * (throttlePosition / 100);
+
+    if (requestedTorque == 0) {
+        double targetA = 2;
+
+        double maxP = 15.2384;
+        double dragCoeff = .6;
+        double airDensityCoeff = 1.225;
+        double frontalAreaOfCar = .4;
+        double dragForce = ((.5 * dragCoeff * airDensityCoeff * frontalAreaOfCar) * pow(velocityCG, 2));
+        double rollingForce = 88.24;
+        double motorRPM = 60 * velocityCG / (2 * M_PI * r) * G;
+        double rpmCoversion = 9.5492965964254;
+        double motorRadSec = motorRPM / rpmCoversion;
+
+        double forceDueToMotor = (1 - exp(- velocityCG / .8) * ((targetA * mass) - dragForce - rollingForce));
+        double torqueAtWheel = r * forceDueToMotor;
+
+        double torqueAtMotor;
+        if (((torqueAtWheel / G / .94) * motorRadSec) < maxP * 1000) {
+            torqueAtMotor = torqueAtWheel / G / .94;
+        } else {
+            torqueAtMotor = 1000 * maxP / motorRadSec;
+        }
+
+        requestedTorque = - torqueAtMotor;
+    }
     return requestedTorque;
 }
 
@@ -49,6 +76,7 @@ double calculateTurnRadius(double steeringAngle) {
     double turnRadius = sqrt(pow(t_f/4, 2) + (pow(L, 2) * pow(1 / tan(steeringAngle),2)));
     return turnRadius;
 }
+
 /*
  * Function: calculateDesiredYawRate
  * ---------------------------------
@@ -117,36 +145,84 @@ double calculateDesiredYawMoment(double yawError, double currentYawRate, double 
 }
 
 
+double calculateTorqueDistributionDelta(double desiredYawMoment) {
+    double torqueDelta = desiredYawMoment * r / (t_r * G);
+
+    return torqueDelta;
+}
+
+DesiredTorqueStruct calculateDesiredTorque(double steeringAngle, double torqueRequest, double torqueDelta) {
+    DesiredTorqueStruct desiredTorque;
+    double desiredTorqueRR;
+    double desiredTorqueRL;
+
+    if (steeringAngle < 0) {
+        desiredTorqueRR = .5 * (torqueRequest + torqueDelta);
+        desiredTorqueRL = .5 * (torqueRequest - torqueDelta);
+    } else {
+        desiredTorqueRR = .5 * (torqueRequest - torqueDelta);
+        desiredTorqueRL = .5 * (torqueRequest + torqueDelta);
+    }
+
+    desiredTorque.desiredTorqueRR = desiredTorqueRR;
+    desiredTorque.desiredTorqueRL = desiredTorqueRL;
+
+    return desiredTorque;
+}
+
 ForceZStruct calculateVerticalLoadWeightTransfer(double accelerationLongitude, double accelerationLatitude) {
     ForceZStruct forces;
-    forces.F_zrl = (.5 * mass * grav * l_f / L) - (p_r * accelerationLatitude * mass * heightCG / L) + (.5 * accelerationLongitude * mass * heightCG / L);
-    forces.F_zrr = (.5 * mass * grav * l_f / L) + (p_r * accelerationLatitude * mass * heightCG / L) + (.5 * accelerationLongitude * mass * heightCG / L);
+    forces.F_zrl = (.5 * mass * grav * l_f / L) - (p_r * accelerationLatitude * mass * heightCG / t_r) + (.5 * accelerationLongitude * mass * heightCG / L);
+    forces.F_zrr = (.5 * mass * grav * l_f / L) + (p_r * accelerationLatitude * mass * heightCG / t_r) + (.5 * accelerationLongitude * mass * heightCG / L);
+
+    forces.F_zfl = (.5 * mass * grav * l_r / L) - (p_f * accelerationLatitude * mass * heightCG / t_r) - (.5 * accelerationLongitude * mass * heightCG / L);
+    forces.F_zfr = (.5 * mass * grav * l_r / L) + (p_f * accelerationLatitude * mass * heightCG / t_r) - (.5 * accelerationLongitude * mass * heightCG / L);
 
     return forces;
 }
 
-double calculateLateralForces(double yaw_rate, double velocityLongitude, double velocityLatitude, double steeringAngle) {
-    F_yf = - C_f * 
+ForceYStruct calculateLateralForces(double accelerationLatitude, ForceZStruct forcesZ) {
+    ForceYStruct forces;
+    force.F_yfr = (forcesZ.F_zfr / grav) * accelerationLatitude;
+    force.F_yfl = (forcesZ.F_zfl / grav) * accelerationLatitude;
+    force.F_yrr = (forcesZ.F_zrr / grav) * accelerationLatitude;
+    force.F_yrl = (forcesZ.F_zrl / grav) * accelerationLatitude;
+
+    return forces;
 }
 
 
-TMaxStruct calculateTractionLimitTorque(double F_yrl, double F_yrr, double F_zrl, double F_zrr) {
-    TMaxStruct tmaxes;
-    double TMax_rl = r * sqrt(pow((mu * F_zrl), 2.0) - F_yrl);
-    double TMax_rr = r * sqrt(pow((mu * F_zrr), 2.0) - F_yrr);
+TMaxStruct calculateTractionLimitTorque(ForceYStruct forcesY, ForceZStruct forcesZ) {
+    TMaxStruct tMaxes;
+    tMaxes.maxTorqueRL = (r * sqrt(pow(mu * forcesZ.F_zrl, 2.0) - forcesY.F_yrl)) / G;
+    tMaxes.maxTorqueRR = (r * sqrt(pow(mu * forcesZ.F_zrr, 2.0) - forcesY.F_yrr)) / G;
+
+    return tMaxes;
+}
+
+
+double tractionLimitCheck(DesiredTorqueStruct desiredTorque, TMaxStruct tMaxes) {
+    NewTorqueStruct newTorque;
+    double newTorqueRR;
+    double newTorqueRL;
     
-    tmaxes.TMax_rl = TMax_rl;
-    tmaxes.TMax_rr = TMax_rr;
+    if (tMaxes.maxTorqueRR > desiredTorque.desiredTorqueRR) && (tMaxes.maxTorqueRL > desiredTorque.desiredTorqueRL) {
+        newTorqueRR = desiredTorque.desiredTorqueRR;
+        newTorqueRL = desiredTorque.desiredTorqueRL;
+    } else {
+        double TDiff = max(desiredTorque.desiredTorqueRR - tMaxes.maxTorqueRR, desiredTorque.desiredTorqueRL - tMaxes.maxTorqueRL);
+        newTorqueRR = desiredTorque.desiredTorqueRR - TDiff;
+        newTorqueRL = desiredTorque.desiredTorqueRL - TDiff;
+    }
 
-    return tmaxes;
-}
+    if (newTorqueRR > (maxTorque / 2) || newTorqueRL > (maxTorque / 2)) {
+        double diff = max(newTorqueRR - maxTorque / 2, newTorqueRL - maxTorque / 2);
+        newTorqueRR = newTorqueRR - diff;
+        newTorqueRL = newTorqueRL - diff;
+    }
 
-double calculateTorqueDistributionDelta(double desiredYawMoment, double steeringAngle, double velocityCG) {
-    double cot = 1; // REMOVE
-    double w = 1; // REMOVE
+    newTorque.newTorqueRR = newTorqueRR;
+    newTorque.newTorqueRL = newTorqueRL;
 
-    double R = sqrt(pow((t_f / 2), 2.0) + pow(L, 2.0) * pow(cot, 2.0) * steeringAngle);
-    // double R = (I + K_u * velocityCG) / steeringAngle;
-    double torqueDistributionDelta = desiredYawMoment * R * w / (t_r * G);
-    return torqueDistributionDelta;
+    return newTorque;
 }
