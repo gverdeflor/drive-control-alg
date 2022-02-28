@@ -14,20 +14,19 @@
 #include <math.h>
 #include <stdbool.h>
 
-// USING DUMMY VARIABLES, NEED TO UPDATE!
-#define minVoltage 10           // V
-#define maxVoltage 290          // V
-#define minTemperature 10       // deg C
-#define maxTemperature 290      // deg C
-#define wheelDiameter 5         // m
-#define minLapSpeed 5           // m/s
-#define maxLapSpeed 40          // m/s
-#define minLatitude 100         // deg
-#define maxLatitude 100         // deg
-#define minLongitude 100        // deg
-#define maxLongitude 100        // deg
-#define minLapDistance 5000     // m
-#define maxLapDistance 10000    // m
+#define minVoltage 50               // V        * mimimum voltage pack should be discharged to *
+#define maxVoltage 250              // V        * nominal voltage of fully charged pack *
+#define minTemperature 10           // deg C    * from Sony VTC5A 18650 datasheet *
+#define maxTemperature 50           // deg C    * from Sony VTC5A 18650 datasheet *
+#define wheelDiameter 0.5207        // m        * 20-in Hoosier wheels *
+#define minLapSpeed 6.7             // m/s      * 15 mph minimum speed crossing finish line *
+#define maxLapSpeed 31.3            // m/s      * 70 mph maximum speed crossing finish line *
+#define minLatitude 100             // deg      * DEFINES GEOZONE *
+#define maxLatitude 100             // deg      * DEFINES GEOZONE *
+#define minLongitude 100            // deg      * DEFINES GEOZONE *
+#define maxLongitude 100            // deg      * DEFINES GEOZONE *
+#define minLapDistance 950          // m        * lap distance taking narrowest turns *
+#define maxLapDistance 1050         // m        * lap distance taking widest turns *
 
 //------------------------ safetyCircuitCheck ----------------------
 // Description:   checks if GLVS safety circuit fault has occurred
