@@ -36,7 +36,7 @@
 //------------------------------------------------------------------
 bool safetyCircuitCheck(double currVoltage, double currTemperature) {
     // Check pack voltage and temperature limits
-    if ( (minVoltage <= currVoltage <= maxVoltage) && (minTemperature <= currTemperature <= maxTemperature) ) {
+    if ( ((minVoltage <= currVoltage) && (currVoltage <= maxVoltage)) && ((minTemperature <= currTemperature) && (currTemperature <= maxTemperature)) ) {
         return true;
     } else {
         return false;
@@ -79,10 +79,10 @@ double calcDistanceTraveled(double rearWheelSpeed, double currLapTime) {
 // Outputs:       true if lap has been finished, false otherwise
 //------------------------------------------------------------------
 bool finishedLap(double currLatitude, double currLongitude, double currSpeed, double currLapDistance) {
-    if ( (minLapSpeed <= currSpeed <= maxLapSpeed) &&   // check for appropriate speed crossing finish line
-        (minLapSpeed <= currSpeed <= maxLapSpeed) &&    // check for latitude associated with finish line
-        (minLapSpeed <= currSpeed <= maxLapSpeed) &&    // check for longitude associated with finish line
-        (minLapSpeed <= currSpeed <= maxLapSpeed) ) {   // check for appropriate distance traveled for a lap
+    if ( ((minLapSpeed <= currSpeed) && (currSpeed <= maxLapSpeed)) &&   // check for appropriate speed crossing finish line
+        ((minLapSpeed <= currSpeed) && (currSpeed <= maxLapSpeed)) &&    // check for latitude associated with finish line
+        ((minLapSpeed <= currSpeed) && (currSpeed <= maxLapSpeed)) &&    // check for longitude associated with finish line
+        ((minLapSpeed <= currSpeed) && (currSpeed <= maxLapSpeed)) ) {   // check for appropriate distance traveled for a lap
             return true;
         } else {
             return false;
