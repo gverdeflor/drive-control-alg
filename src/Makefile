@@ -1,9 +1,9 @@
 CC=gcc
 CFLAGS=-I.
 
-drive_control: drive_control.o
-		$(CC) -o drive_control drive_control.o
+drive_control: main.o
+		$(CC) -o main main.o
 
 clean: 
-		rm *.o drive_control
+		rm *.o main
 

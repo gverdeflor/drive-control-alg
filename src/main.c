@@ -1,4 +1,4 @@
-/* drive_control.c ---
+/* main.c ---
  * 
  *
  * Author: Suraj Srivats, Garth Verdeflor
