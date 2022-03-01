@@ -75,17 +75,17 @@ torque_requested_t calcRequestedTorque(double steeringAngle, double torqueReques
 /* 
  * calculates vertical load weight transfer based on longitudinal and lateral acceleration
  */
-forces_z_t calcVerticalLoadWeightTransfer(double accelerationLongitude, double accelerationLatitude);
+force_z_t calcVerticalLoadWeightTransfer(double accelerationLongitude, double accelerationLatitude);
 
 /* 
  * calculates vertical load weight transfer based on longitudinal and lateral acceleration
  */
-forces_y_t calcLateralForces(double accelerationLatitude, force_z_t forces_z);
+force_y_t calcLateralForces(double accelerationLatitude, force_z_t forces_z);
 
 /* 
  *  calculates traction limit torque based on lateral acceleration and forces in Z-direction
  */
-torque_max_t calcTractionLimitTorque(force_y_t forces_y, forces_z_t forces_z);
+torque_max_t calcTractionLimitTorque(force_y_t forces_y, force_z_t forces_z);
 
 /* 
  *  calculates traction limit torque based on requested torque and maximum torque

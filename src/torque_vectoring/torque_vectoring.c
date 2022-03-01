@@ -115,7 +115,7 @@ double calcTurnRadius(double steeringAngle) {
  */
 double calcYawRateRequest(double steeringAngle, double velocityCG) {
     double desiredYawRate;
-    double turnRadius = calculateTurnRadius(steeringAngle);
+    double turnRadius = calcTurnRadius(steeringAngle);
 
     if (steeringAngle > 0) {
         desiredYawRate = (velocityCG / turnRadius);
@@ -217,8 +217,8 @@ torque_requested_t calcRequestedTorque(double steeringAngle, double torqueReques
         requestedTorqueRL = 0.5 * (torqueRequest + torqueDelta);
     }
 
-    requestedTorque.torque_requested_rear_right = desiredTorqueRR;
-    requestedTorque.torque_requested_rear_left = desiredTorqueRL;
+    requestedTorque.torque_requested_rear_right = requestedTorqueRR;
+    requestedTorque.torque_requested_rear_left = requestedTorqueRL;
 
     return requestedTorque;
 }
@@ -277,7 +277,7 @@ force_y_t calcLateralForces(double accelerationLatitude, force_z_t Z) {
 torque_max_t calcTractionLimitTorque(force_y_t Y, force_z_t Z) {
     torque_max_t T;
     T.torque_max_rear_left = (r * sqrt(pow(mu * Z.force_z_rear_left, 2.0) - Y.force_y_rear_left)) / G;
-    T.torque_max_rear_right = (r * sqrt(pow(mu * Z.force_z_rear_right, 2.0) - Y.F_yforce_y_rear_rightrr)) / G;
+    T.torque_max_rear_right = (r * sqrt(pow(mu * Z.force_z_rear_right, 2.0) - Y.force_y_rear_right)) / G;
 
     return T;
 }
@@ -315,5 +315,5 @@ torque_corrected_t checkTractionLimit(torque_requested_t R, torque_max_t M) {
     C.torque_corrected_rear_right = newTorqueRR;
     C.torque_corrected_rear_left = newTorqueRL;
 
-    return newTorque;
+    return C;
 }
