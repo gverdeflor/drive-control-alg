@@ -34,8 +34,8 @@
 #define h_s         .28                                                     // roll (?)
 #define K_r         570.0197                                                // roll stiffness rear
 #define K_f         546.4094                                                // roll stiffness front
-#define p_r         h_s * (K_r / (K_f * K_r))                               // roll distribution rear (units?)
-#define p_f         h_s * (K_f / (K_f * K_r))                               // roll distribution rear (units?)
+#define p_r         h_s * (K_r / (K_f + K_r))                               // roll distribution rear (units?)
+#define p_f         h_s * (K_f / (K_f + K_r))                               // roll distribution rear (units?)
 #define I_z         120                                                     // kg * (m) ^ 2 - moment of inertia in the z axis
 #define grav        9.82                                                    // m / (s) ^ 2    // gravity
 
@@ -68,12 +68,12 @@ double calcTorqueRequest(double throttlePosition, double velocityCG) {
         double rpmCoversion = 9.5492965964254;
         double motorRadSec = motorRPM / rpmCoversion;
 
-        double forceDueToMotor = (1 - exp(- velocityCG / .8) * ((targetA * mass) - dragForce - rollingForce));
+        double forceDueToMotor = (1 - exp(- velocityCG / .8)) * ((targetA * mass) - dragForce - rollingForce);
         double torqueAtWheel = r * forceDueToMotor;
 
         double torqueAtMotor;
-        if (((torqueAtWheel / G / .94) * motorRadSec) < maxP * 1000) {
-            torqueAtMotor = torqueAtWheel / G / .94;
+        if (((torqueAtWheel / (G * .94)) * motorRadSec) < (maxP * 1000)) {
+            torqueAtMotor = torqueAtWheel / (G * .94);
         } else {
             torqueAtMotor = 1000 * maxP / motorRadSec;
         }
@@ -164,11 +164,13 @@ double calcYawMomentRequest(double yawError, double currentYawRate, double reque
     double eta = 1.1;
 
     double turnRadius = calcTurnRadius(steeringAngle);
-    double beta = 57.3 * l_r / turnRadius - r * pow(velocityCG, 2) / (K_r * grav * turnRadius);
+    double beta = 57.3 * l_r / turnRadius - r * pow(velocityCG, 2) / (K_r * grav * turnRadius) ;
+    // printf("%f", beta);
     double requestedYawRateDerivative = (requestedYawRate - prevYawRate) / timestep;
+    // double requestedYawRateDerivative = .174;
 
     double derivTerm = I_z * requestedYawRateDerivative;
-    double sideslipTerm = sideSlipAngleCoeff * beta; // beta
+    double sideslipTerm = sideSlipAngleCoeff * beta / 57.3; // beta in radians
     double yawOverVxTerm = yawRateOverVxCoeff * currentYawRate / velocityCG;
     double steeringAngleTerm = steeringAngleCoeff * steeringAngle; // radians
     double yawErrorTerm = eta * I_z * yawError;
@@ -276,8 +278,8 @@ force_y_t calcLateralForces(double accelerationLatitude, force_z_t Z) {
  */
 torque_max_t calcTractionLimitTorque(force_y_t Y, force_z_t Z) {
     torque_max_t T;
-    T.torque_max_rear_left = (r * sqrt(pow(mu * Z.force_z_rear_left, 2.0) - Y.force_y_rear_left)) / G;
-    T.torque_max_rear_right = (r * sqrt(pow(mu * Z.force_z_rear_right, 2.0) - Y.force_y_rear_right)) / G;
+    T.torque_max_rear_left = (r * sqrt(pow(mu * Z.force_z_rear_left, 2.0) - pow(Y.force_y_rear_left, 2.0))) / G;
+    T.torque_max_rear_right = (r * sqrt(pow(mu * Z.force_z_rear_right, 2.0) - pow(Y.force_y_rear_right, 2.0))) / G;
 
     return T;
 }
@@ -296,24 +298,137 @@ torque_corrected_t checkTractionLimit(torque_requested_t R, torque_max_t M) {
     torque_corrected_t C;
     double newTorqueRR;
     double newTorqueRL;
-    
-    if ((M.torque_max_rear_right > R.torque_requested_rear_right) && (M.torque_max_rear_left > R.torque_requested_rear_left)) {
-        newTorqueRR = R.torque_requested_rear_right;
-        newTorqueRL = R.torque_requested_rear_left;
-    } else {
-        double torqueDiff = fmax(R.torque_requested_rear_right - M.torque_max_rear_right, R.torque_requested_rear_left - M.torque_max_rear_left);
-        newTorqueRR = R.torque_requested_rear_right - torqueDiff;
-        newTorqueRL = R.torque_requested_rear_left - torqueDiff;
+
+    if (R.torque_requested_rear_right >= 0 && R.torque_requested_rear_left >= 0) {
+
+        if (M.torque_max_rear_right > R.torque_requested_rear_right) {
+            if (M.torque_max_rear_left > R.torque_requested_rear_left) {
+                newTorqueRR = R.torque_requested_rear_right;
+                newTorqueRL = R.torque_requested_rear_left;
+            } else {
+                double Tdiff = fmax(R.torque_requested_rear_right - M.torque_max_rear_right, R.torque_requested_rear_left - M.torque_max_rear_left);
+                newTorqueRR = R.torque_requested_rear_right - Tdiff;
+                newTorqueRL = R.torque_requested_rear_left - Tdiff;
+            }
+        } else {
+            double Tdiff = fmax(R.torque_requested_rear_right - M.torque_max_rear_right,R.torque_requested_rear_left - M.torque_max_rear_left);
+            newTorqueRR = R.torque_requested_rear_right - Tdiff;
+            newTorqueRL = R.torque_requested_rear_left - Tdiff;
+        }
+
+        if (-newTorqueRL > M.torque_max_rear_left) {
+            newTorqueRL = -M.torque_max_rear_left;
+        }
+
+        if (-newTorqueRR > M.torque_max_rear_right) {
+            newTorqueRR = -M.torque_max_rear_right;
+        }
+    } else if (R.torque_requested_rear_right >= 0 && R.torque_requested_rear_left < 0) {
+        if(M.torque_max_rear_right > R.torque_requested_rear_right) {
+            if(M.torque_max_rear_left > -R.torque_requested_rear_left) {
+                newTorqueRR = R.torque_requested_rear_right;
+                newTorqueRL = R.torque_requested_rear_left;
+            } else {
+                double Tdiff = -R.torque_requested_rear_left - M.torque_max_rear_left;
+                newTorqueRR = R.torque_requested_rear_right - Tdiff;
+                newTorqueRL = R.torque_requested_rear_left + Tdiff;
+            }
+        } else {
+            double Tdiff = fmax(R.torque_requested_rear_right - M.torque_max_rear_right, -R.torque_requested_rear_left - M.torque_max_rear_left);
+            newTorqueRR = R.torque_requested_rear_right - Tdiff;
+            newTorqueRL = fmax(R.torque_requested_rear_left - Tdiff, -M.torque_max_rear_left);
+        }
+        
+        if (-newTorqueRR > M.torque_max_rear_right) {
+            double diff = -newTorqueRR - M.torque_max_rear_right;
+            newTorqueRR = -M.torque_max_rear_right;
+            newTorqueRL = fmax(newTorqueRL - diff, -M.torque_max_rear_left);
+        }
+    } else if (R.torque_requested_rear_right < 0 && R.torque_requested_rear_left >= 0) {
+        if (M.torque_max_rear_left > R.torque_requested_rear_left) {
+            if (M.torque_max_rear_right > -R.torque_requested_rear_right) {
+                newTorqueRR = R.torque_requested_rear_right;
+                newTorqueRL = R.torque_requested_rear_left;
+            } else {
+                double Tdiff = -R.torque_requested_rear_right - M.torque_max_rear_right;
+                newTorqueRR = R.torque_requested_rear_right + Tdiff;
+                newTorqueRL = R.torque_requested_rear_left - Tdiff;
+            }
+        } else {
+            double Tdiff = fmax(R.torque_requested_rear_left - M.torque_max_rear_left, -R.torque_requested_rear_right - M.torque_max_rear_right);
+            newTorqueRL = R.torque_requested_rear_left - Tdiff;
+            newTorqueRR = fmax(R.torque_requested_rear_right - Tdiff, -M.torque_max_rear_right);
+        }
+        
+        if (-newTorqueRL > M.torque_max_rear_left) {
+            double diff = -newTorqueRL - M.torque_max_rear_left;
+            newTorqueRL = -M.torque_max_rear_left;
+            newTorqueRR = fmax(newTorqueRR - diff, -M.torque_max_rear_right);
+        }
+    } else if (R.torque_requested_rear_right < 0 && R.torque_requested_rear_left < 0) {
+        if (-M.torque_max_rear_left < R.torque_requested_rear_left) {
+            if (-M.torque_max_rear_right < R.torque_requested_rear_right) {
+                newTorqueRR = R.torque_requested_rear_right;
+                newTorqueRL = R.torque_requested_rear_left;
+            } else {
+                double Tdiff = -R.torque_requested_rear_right - M.torque_max_rear_right;
+                newTorqueRR = fmin(0,R.torque_requested_rear_right + Tdiff);
+                newTorqueRL = fmax(-M.torque_max_rear_left, R.torque_requested_rear_left - Tdiff);
+            }
+        } else {
+            double Tdiff = -R.torque_requested_rear_left - M.torque_max_rear_left;
+            newTorqueRR = fmax(-M.torque_max_rear_right, R.torque_requested_rear_right - Tdiff);
+            newTorqueRL = fmin(0, R.torque_requested_rear_left + Tdiff);
+        }
     }
 
-    if ((newTorqueRR > (maxTorque / 2)) || (newTorqueRL > (maxTorque / 2))) {
-        double diff = fmax(newTorqueRR - maxTorque / 2, newTorqueRL - maxTorque / 2);
-        newTorqueRR = newTorqueRR - diff;
-        newTorqueRL = newTorqueRL - diff;
+    if (newTorqueRR > maxTorque / 2) {
+        if (newTorqueRL >= 0) {
+            double diff = fmax(newTorqueRR - maxTorque / 2, newTorqueRL - maxTorque / 2);
+            newTorqueRR = fmax(fmax(newTorqueRR - diff, -M.torque_max_rear_right), -maxTorque / 2);
+            newTorqueRL = fmax(fmax(newTorqueRL - diff, -M.torque_max_rear_left), -maxTorque / 2);
+        } else {
+            double diff = fmax(newTorqueRR - maxTorque / 2, -newTorqueRL - maxTorque / 2);
+            newTorqueRR = fmax(fmax(newTorqueRR - diff, -M.torque_max_rear_right), -maxTorque / 2);
+            newTorqueRL = fmax(fmax(newTorqueRL - diff, -M.torque_max_rear_left), -maxTorque / 2);
+        }
+    } else if (newTorqueRL > maxTorque / 2) {
+        if (newTorqueRR >= 0) {
+            double diff = newTorqueRL - maxTorque / 2;
+            newTorqueRL = fmax(fmax(newTorqueRL - diff, -M.torque_max_rear_left), -maxTorque / 2);
+            newTorqueRR = fmax(fmax(newTorqueRR - diff, -M.torque_max_rear_right), -maxTorque / 2);
+        } else {
+            double diff = fmax(newTorqueRR - maxTorque / 2, -newTorqueRL - maxTorque / 2);
+            newTorqueRL = fmax(fmax(newTorqueRL - diff, -M.torque_max_rear_left), -maxTorque / 2);
+            newTorqueRR = fmax(fmax(newTorqueRR - diff, -M.torque_max_rear_right), -maxTorque / 2);
+        }
     }
 
-    C.torque_corrected_rear_right = newTorqueRR;
+    if (-newTorqueRR > maxTorque / 2) {
+        if (newTorqueRL <= 0) {
+            double diff = fmax(-newTorqueRR - maxTorque / 2, -newTorqueRL -maxTorque / 2);
+            newTorqueRR = fmax(fmax(newTorqueRR + diff, -M.torque_max_rear_right), -maxTorque / 2);
+            newTorqueRL = fmax(fmax(newTorqueRL + diff, -M.torque_max_rear_left), -maxTorque / 2);
+        } else {
+            double diff = fmax(-newTorqueRR - maxTorque / 2, newTorqueRL -maxTorque / 2);
+            newTorqueRR = fmax(fmax(newTorqueRR + diff, -M.torque_max_rear_right), -maxTorque / 2);
+            newTorqueRL = fmax(fmax(newTorqueRL - diff, -M.torque_max_rear_left), -maxTorque / 2);
+        }
+    } else if (-newTorqueRL > maxTorque / 2) {
+        if (-newTorqueRR >= 0) {
+            double diff = -newTorqueRL - maxTorque / 2;
+            newTorqueRL = fmax(fmax(newTorqueRL + diff, -M.torque_max_rear_left), -maxTorque / 2);
+            newTorqueRR = fmax(fmax(newTorqueRR + diff, -M.torque_max_rear_right), -maxTorque / 2);
+        } else {
+            double diff = fmax(newTorqueRR - maxTorque / 2, -newTorqueRL - maxTorque / 2);
+            newTorqueRL = fmax(fmax(newTorqueRL + diff, -M.torque_max_rear_left), -maxTorque / 2);
+            newTorqueRR = fmax(fmax(newTorqueRR - diff, -M.torque_max_rear_right), -maxTorque / 2);
+        }
+    }
+
+
     C.torque_corrected_rear_left = newTorqueRL;
+    C.torque_corrected_rear_right = newTorqueRR;
 
     return C;
 }
