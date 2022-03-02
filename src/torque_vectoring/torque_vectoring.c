@@ -34,8 +34,8 @@
 #define h_s         .28                                                     // roll (?)
 #define K_r         570.0197                                                // roll stiffness rear
 #define K_f         546.4094                                                // roll stiffness front
-#define p_r         h_s * (K_r / (K_f * K_r))                               // roll distribution rear (units?)
-#define p_f         h_s * (K_f / (K_f * K_r))                               // roll distribution rear (units?)
+#define p_r         h_s * (K_r / (K_f + K_r))                               // roll distribution rear (units?)
+#define p_f         h_s * (K_f / (K_f + K_r))                               // roll distribution rear (units?)
 #define I_z         120                                                     // kg * (m) ^ 2 - moment of inertia in the z axis
 #define grav        9.82                                                    // m / (s) ^ 2    // gravity
 
@@ -68,11 +68,11 @@ double calcTorqueRequest(double throttlePosition, double velocityCG) {
         double rpmCoversion = 9.5492965964254;
         double motorRadSec = motorRPM / rpmCoversion;
 
-        double forceDueToMotor = (1 - exp(- velocityCG / .8) * ((targetA * mass) - dragForce - rollingForce));
+        double forceDueToMotor = (1 - exp(- velocityCG / .8)) * ((targetA * mass) - dragForce - rollingForce);
         double torqueAtWheel = r * forceDueToMotor;
 
         double torqueAtMotor;
-        if (((torqueAtWheel / G / .94) * motorRadSec) < maxP * 1000) {
+        if (((torqueAtWheel / (G * 0.94)) * motorRadSec) < (maxP * 1000)) {
             torqueAtMotor = torqueAtWheel / G / 0.94;
         } else {
             torqueAtMotor = 1000 * maxP / motorRadSec;
@@ -168,7 +168,7 @@ double calcDesiredYawMoment(double yawError, double currYawRate, double desiredY
     double desiredYawRateDerivative = (desiredYawRate - prevYawRate) / timestep;
 
     double derivTerm = I_z * desiredYawRateDerivative;
-    double sideslipTerm = sideSlipAngleCoeff * beta; // beta
+    double sideslipTerm = sideSlipAngleCoeff * beta / 57.3; // beta in radians
     double yawOverVxTerm = yawRateOverVxCoeff * currYawRate / velocityCG;
     double steeringAngleTerm = steeringAngleCoeff * steeringAngle; // radians
     double yawErrorTerm = eta * I_z * yawError;
@@ -278,8 +278,8 @@ force_y_t calcLateralForces(double accelerationLatitude, force_z_t Z) {
  */
 torque_max_t calcTractionLimitTorque(force_y_t Y, force_z_t Z) {
     torque_max_t M;
-    M.maxTorqueRL = (r * sqrt(pow(mu * Z.F_zrl, 2.0) - Y.F_yrl)) / G;
-    M.maxTorqueRR = (r * sqrt(pow(mu * Z.F_zrr, 2.0) - Y.F_yrr)) / G;
+    M.maxTorqueRL = (r * sqrt(pow(mu * Z.F_zrl, 2.0) - pow(Y.F_yrl, 2.0))) / G;
+    M.maxTorqueRR = (r * sqrt(pow(mu * Z.F_zrr, 2.0) - pow(Y.F_yrr, 2.0))) / G;
 
     return M;
 }
@@ -288,7 +288,7 @@ torque_max_t calcTractionLimitTorque(force_y_t Y, force_z_t Z) {
  * --------------------------------------
  * calculates the traction limit torque
  * 
- *      R: requested torque struct from calculated desired torque from 
+ *      D: requested torque struct from calculated desired torque from 
  *      M: max traction limit torques struct from traction limit torque method
  * 
  * returns: struct with the new torques
@@ -297,24 +297,136 @@ torque_new_t checkTractionLimit(torque_desired_t D, torque_max_t M) {
     torque_new_t N;
     double newTorqueRR;
     double newTorqueRL;
-    
-    if ((M.maxTorqueRR > D.desiredTorqueRR) && (M.maxTorqueRL > D.desiredTorqueRL)) {
-        newTorqueRR = D.desiredTorqueRR;
-        newTorqueRL = D.desiredTorqueRL;
-    } else {
-        double TDiff = fmax(D.desiredTorqueRR - M.maxTorqueRR, D.desiredTorqueRL - M.maxTorqueRL);
-        newTorqueRR = D.desiredTorqueRR - TDiff;
-        newTorqueRL = D.desiredTorqueRL - TDiff;
+
+    if (D.desiredTorqueRR >= 0 && D.desiredTorqueRL >= 0) {
+
+        if (M.maxTorqueRR > D.desiredTorqueRR) {
+            if (M.maxTorqueRL > D.desiredTorqueRL) {
+                newTorqueRR = D.desiredTorqueRR;
+                newTorqueRL = D.desiredTorqueRL;
+            } else {
+                double Tdiff = fmax(D.desiredTorqueRR - M.maxTorqueRR, D.desiredTorqueRL - M.maxTorqueRL);
+                newTorqueRR = D.desiredTorqueRR - Tdiff;
+                newTorqueRL = D.desiredTorqueRL - Tdiff;
+            }
+        } else {
+            double Tdiff = fmax(D.desiredTorqueRR - M.maxTorqueRR,D.desiredTorqueRL - M.maxTorqueRL);
+            newTorqueRR = D.desiredTorqueRR - Tdiff;
+            newTorqueRL = D.desiredTorqueRL - Tdiff;
+        }
+
+        if (-newTorqueRL > M.maxTorqueRL) {
+            newTorqueRL = -M.maxTorqueRL;
+        }
+
+        if (-newTorqueRR > M.maxTorqueRR) {
+            newTorqueRR = -M.maxTorqueRR;
+        }
+    } else if (D.desiredTorqueRR >= 0 && D.desiredTorqueRL < 0) {
+        if(M.maxTorqueRR > D.desiredTorqueRR) {
+            if(M.maxTorqueRL > -D.desiredTorqueRL) {
+                newTorqueRR = D.desiredTorqueRR;
+                newTorqueRL = D.desiredTorqueRL;
+            } else {
+                double Tdiff = -D.desiredTorqueRL - M.maxTorqueRL;
+                newTorqueRR = D.desiredTorqueRR - Tdiff;
+                newTorqueRL = D.desiredTorqueRL + Tdiff;
+            }
+        } else {
+            double Tdiff = fmax(D.desiredTorqueRR - M.maxTorqueRR, -D.desiredTorqueRL - M.maxTorqueRL);
+            newTorqueRR = D.desiredTorqueRR - Tdiff;
+            newTorqueRL = fmax(D.desiredTorqueRL - Tdiff, -M.maxTorqueRL);
+        }
+        
+        if (-newTorqueRR > M.maxTorqueRR) {
+            double diff = -newTorqueRR - M.maxTorqueRR;
+            newTorqueRR = -M.maxTorqueRR;
+            newTorqueRL = fmax(newTorqueRL - diff, -M.maxTorqueRL);
+        }
+    } else if (D.desiredTorqueRR < 0 && D.desiredTorqueRL >= 0) {
+        if (M.maxTorqueRL > D.desiredTorqueRL) {
+            if (M.maxTorqueRR > -D.desiredTorqueRR) {
+                newTorqueRR = D.desiredTorqueRR;
+                newTorqueRL = D.desiredTorqueRL;
+            } else {
+                double Tdiff = -D.desiredTorqueRR - M.maxTorqueRR;
+                newTorqueRR = D.desiredTorqueRR + Tdiff;
+                newTorqueRL = D.desiredTorqueRL - Tdiff;
+            }
+        } else {
+            double Tdiff = fmax(D.desiredTorqueRL - M.maxTorqueRL, -D.desiredTorqueRR - M.maxTorqueRR);
+            newTorqueRL = D.desiredTorqueRL - Tdiff;
+            newTorqueRR = fmax(D.desiredTorqueRR - Tdiff, -M.maxTorqueRR);
+        }
+        
+        if (-newTorqueRL > M.maxTorqueRL) {
+            double diff = -newTorqueRL - M.maxTorqueRL;
+            newTorqueRL = -M.maxTorqueRL;
+            newTorqueRR = fmax(newTorqueRR - diff, -M.maxTorqueRR);
+        }
+    } else if (D.desiredTorqueRR < 0 && D.desiredTorqueRL < 0) {
+        if (-M.maxTorqueRL < D.desiredTorqueRL) {
+            if (-M.maxTorqueRR < D.desiredTorqueRR) {
+                newTorqueRR = D.desiredTorqueRR;
+                newTorqueRL = D.desiredTorqueRL;
+            } else {
+                double Tdiff = -D.desiredTorqueRR - M.maxTorqueRR;
+                newTorqueRR = fmin(0,D.desiredTorqueRR + Tdiff);
+                newTorqueRL = fmax(-M.maxTorqueRL, D.desiredTorqueRL - Tdiff);
+            }
+        } else {
+            double Tdiff = -D.desiredTorqueRL - M.maxTorqueRL;
+            newTorqueRR = fmax(-M.maxTorqueRR, D.desiredTorqueRR - Tdiff);
+            newTorqueRL = fmin(0, D.desiredTorqueRL + Tdiff);
+        }
     }
 
-    if ((newTorqueRR > (maxTorque / 2)) || (newTorqueRL > (maxTorque / 2))) {
-        double diff = fmax(newTorqueRR - maxTorque / 2, newTorqueRL - maxTorque / 2);
-        newTorqueRR = newTorqueRR - diff;
-        newTorqueRL = newTorqueRL - diff;
+    if (newTorqueRR > maxTorque / 2) {
+        if (newTorqueRL >= 0) {
+            double diff = fmax(newTorqueRR - maxTorque / 2, newTorqueRL - maxTorque / 2);
+            newTorqueRR = fmax(fmax(newTorqueRR - diff, -M.maxTorqueRR), -maxTorque / 2);
+            newTorqueRL = fmax(fmax(newTorqueRL - diff, -M.maxTorqueRL), -maxTorque / 2);
+        } else {
+            double diff = fmax(newTorqueRR - maxTorque / 2, -newTorqueRL - maxTorque / 2);
+            newTorqueRR = fmax(fmax(newTorqueRR - diff, -M.maxTorqueRR), -maxTorque / 2);
+            newTorqueRL = fmax(fmax(newTorqueRL - diff, -M.maxTorqueRL), -maxTorque / 2);
+        }
+    } else if (newTorqueRL > maxTorque / 2) {
+        if (newTorqueRR >= 0) {
+            double diff = newTorqueRL - maxTorque / 2;
+            newTorqueRL = fmax(fmax(newTorqueRL - diff, -M.maxTorqueRL), -maxTorque / 2);
+            newTorqueRR = fmax(fmax(newTorqueRR - diff, -M.maxTorqueRR), -maxTorque / 2);
+        } else {
+            double diff = fmax(newTorqueRR - maxTorque / 2, -newTorqueRL - maxTorque / 2);
+            newTorqueRL = fmax(fmax(newTorqueRL - diff, -M.maxTorqueRL), -maxTorque / 2);
+            newTorqueRR = fmax(fmax(newTorqueRR - diff, -M.maxTorqueRR), -maxTorque / 2);
+        }
     }
 
-    N.newTorqueRR = newTorqueRR;
+    if (-newTorqueRR > maxTorque / 2) {
+        if (newTorqueRL <= 0) {
+            double diff = fmax(-newTorqueRR - maxTorque / 2, -newTorqueRL -maxTorque / 2);
+            newTorqueRR = fmax(fmax(newTorqueRR + diff, -M.maxTorqueRR), -maxTorque / 2);
+            newTorqueRL = fmax(fmax(newTorqueRL + diff, -M.maxTorqueRL), -maxTorque / 2);
+        } else {
+            double diff = fmax(-newTorqueRR - maxTorque / 2, newTorqueRL -maxTorque / 2);
+            newTorqueRR = fmax(fmax(newTorqueRR + diff, -M.maxTorqueRR), -maxTorque / 2);
+            newTorqueRL = fmax(fmax(newTorqueRL - diff, -M.maxTorqueRL), -maxTorque / 2);
+        }
+    } else if (-newTorqueRL > maxTorque / 2) {
+        if (-newTorqueRR >= 0) {
+            double diff = -newTorqueRL - maxTorque / 2;
+            newTorqueRL = fmax(fmax(newTorqueRL + diff, -M.maxTorqueRL), -maxTorque / 2);
+            newTorqueRR = fmax(fmax(newTorqueRR + diff, -M.maxTorqueRR), -maxTorque / 2);
+        } else {
+            double diff = fmax(newTorqueRR - maxTorque / 2, -newTorqueRL - maxTorque / 2);
+            newTorqueRL = fmax(fmax(newTorqueRL + diff, -M.maxTorqueRL), -maxTorque / 2);
+            newTorqueRR = fmax(fmax(newTorqueRR - diff, -M.maxTorqueRR), -maxTorque / 2);
+        }
+    }
+
     N.newTorqueRL = newTorqueRL;
+    N.newTorqueRR = newTorqueRR;
 
     return N;
 }
