@@ -2,7 +2,7 @@ CC = gcc
 CFLAGS = -Wall
 OBJS = test_battery_state_all.o CuTest.o test_battery_state.o battery_state.o
 
-test_battery_state_all: $(OBJS)
+battery: $(OBJS)
 	$(CC) $(CFLAGS) $(OBJS) -o test_battery_state.exe
 
 test_battery_state_all.o: test_battery_state_all.c
