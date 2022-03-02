@@ -7,34 +7,34 @@
 #include <stdio.h>
 #include <math.h>
 
-typedef struct force_z {
-    double force_z_rear_left;
-    double force_z_rear_right;
-    double force_z_front_left;
-    double force_z_front_right;
+typedef struct forceZ {
+    double F_zrl;
+    double F_zrr;
+    double F_zfl;
+    double F_zfr;
 } force_z_t;
 
-typedef struct force_y {
-    double force_y_front_right;
-    double force_y_front_left;
-    double force_y_rear_right;
-    double force_y_rear_left;
+typedef struct forceY {
+    double F_yfr;
+    double F_yfl;
+    double F_yrr;
+    double F_yrl;
 } force_y_t;
 
-typedef struct torque_max {
-    double torque_max_rear_left;
-    double torque_max_rear_right;
+typedef struct torqueMax {
+    double maxTorqueRL;
+    double maxTorqueRR;
 } torque_max_t;
 
-typedef struct torque_requested {
-    double torque_requested_rear_right;
-    double torque_requested_rear_left;
-} torque_requested_t;
+typedef struct torqueDesired {
+    double desiredTorqueRR;
+    double desiredTorqueRL;
+} torque_desired_t;
 
-typedef struct torque_corrected {
-    double torque_corrected_rear_right;
-    double torque_corrected_rear_left;
-} torque_corrected_t;
+typedef struct torqueNew {
+    double newTorqueRR;
+    double newTorqueRL;
+} torque_new_t;
 
 
 /* 
@@ -50,27 +50,27 @@ double calcTurnRadius(double steeringAngle);
 /* 
  * calculates yaw rate request based on steering angle and velocity of center of gravity 
  */
-double calcYawRateRequest(double steeringAngle, double velocityCG);
+double calcDesiredYawRate(double steeringAngle, double velocityCG);
 
 /* 
  * calculates yaw error based on difference between requested yaw rate and current yaw rate
  */
-double calcYawError(double requestedYawRate, double currYawRate);
+double calcYawError(double desiredYawRate, double currYawRate);
 
 /* 
  * calculates yaw moment request based on yaw error, yaw rates, steering angle, and velocity of center of gravity  
  */
-double calcYawMomentRequest(double yawError, double currYawRate, double requestedYawRate, double prevYawRate, double steeringAngle, double velocityCG, double timestep);
+double calcDesiredYawMoment(double yawError, double currYawRate, double desiredYawRate, double prevYawRate, double steeringAngle, double velocityCG, double timestep);
 
 /* 
  * calculates torque distribution delta based on requested yaw moment
  */
-double calcTorqueDistributionDelta(double requestedYawMoment);
+double calcTorqueDistributionDelta(double desiredYawMoment);
 
 /* 
  * calculates torque command based on steering angle, torque request, and torque distribution delta
  */
-torque_requested_t calcRequestedTorque(double steeringAngle, double torqueRequest, double torqueDelta);
+torque_desired_t calcDesiredTorque(double steeringAngle, double torqueRequest, double torqueDelta);
 
 /* 
  * calculates vertical load weight transfer based on longitudinal and lateral acceleration
@@ -85,9 +85,9 @@ force_y_t calcLateralForces(double accelerationLatitude, force_z_t forces_z);
 /* 
  *  calculates traction limit torque based on lateral acceleration and forces in Z-direction
  */
-torque_max_t calcTractionLimitTorque(force_y_t forces_y, force_z_t forces_z);
+torque_max_t calcTractionLimitTorque(force_y_t forcesY, force_z_t forcesZ);
 
 /* 
  *  calculates traction limit torque based on requested torque and maximum torque
  */
-torque_corrected_t checkTractionLimit(torque_requested_t requestedTorque, torque_max_t torqueMax);
+torque_new_t checkTractionLimit(torque_desired_t desiredTorque, torque_max_t torquesMax);
