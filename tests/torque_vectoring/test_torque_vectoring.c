@@ -20,17 +20,23 @@
 void calcTorqueRequestTest(CuTest* tc) {
     double throttlePosition = 50;
     double velocityCG = 25;
+    bool enduranceBool = false;
 
-    CuAssertDblEquals(tc, 89.0, calcTorqueRequest(throttlePosition, velocityCG), 0);
+    CuAssertDblEquals(tc, 89.0, calcTorqueRequest(throttlePosition, velocityCG, enduranceBool), 0);
 
     throttlePosition = 25;
-    CuAssertDblEquals(tc, 44.5, calcTorqueRequest(throttlePosition, velocityCG), 0);
+    CuAssertDblEquals(tc, 44.5, calcTorqueRequest(throttlePosition, velocityCG, enduranceBool), 0);
 
     throttlePosition = 75;
-    CuAssertDblEquals(tc, 133.5, calcTorqueRequest(throttlePosition, velocityCG), 0);
+    CuAssertDblEquals(tc, 133.5, calcTorqueRequest(throttlePosition, velocityCG, enduranceBool), 0);
 
     throttlePosition = 100;
-    CuAssertDblEquals(tc, 178.0, calcTorqueRequest(throttlePosition, velocityCG), 0);
+    CuAssertDblEquals(tc, 178.0, calcTorqueRequest(throttlePosition, velocityCG, enduranceBool), 0);
+    
+    throttlePosition = 30;
+    velocityCG = 10;
+    enduranceBool = true;
+    CuAssertDblEquals(tc, 53.400000, calcTorqueRequest(throttlePosition, velocityCG, enduranceBool), 0.0001);
 
     throttlePosition = 30;
     velocityCG = 10;
@@ -38,16 +44,16 @@ void calcTorqueRequestTest(CuTest* tc) {
 
     // Regen Tests
     throttlePosition = 0;
-    CuAssertDblEquals(tc, -33.496246, calcTorqueRequest(throttlePosition, velocityCG), 0.0001);
+    CuAssertDblEquals(tc, -33.496246, calcTorqueRequest(throttlePosition, velocityCG, enduranceBool), 0.0001);
 
-    velocityCG = 10;
-    CuAssertDblEquals(tc, -33.496246, calcTorqueRequest(throttlePosition, velocityCG), 0.0001);
+    velocityCG = 12;
+    CuAssertDblEquals(tc, -33.145253, calcTorqueRequest(throttlePosition, velocityCG, enduranceBool), 0.0001);
 
     velocityCG = 30;
-    CuAssertDblEquals(tc, -25.918886, calcTorqueRequest(throttlePosition, velocityCG), 0.0001);
+    CuAssertDblEquals(tc, -25.918886, calcTorqueRequest(throttlePosition, velocityCG, enduranceBool), 0.0001);
 
     velocityCG = 20;
-    CuAssertDblEquals(tc, -31.102454, calcTorqueRequest(throttlePosition, velocityCG), 0.0001);
+    CuAssertDblEquals(tc, -31.102454, calcTorqueRequest(throttlePosition, velocityCG, enduranceBool), 0.0001);
 }
 
 // --------------------------- Turn Radius Tests --------------------------------- //
@@ -76,11 +82,11 @@ void calcDesiredYawRateTest(CuTest* tc) {
 
     steeringAngle = 1;
     velocityCG = 35;
-    CuAssertDblEquals(tc, 29.831587, calcDesiredYawRate(steeringAngle, velocityCG), 0.0001);
+    CuAssertDblEquals(tc, 29.831587, calcYawRateRequest(steeringAngle, velocityCG), 0.0001);
 
     steeringAngle = 0.174533;
     velocityCG = 7;
-    CuAssertDblEquals(tc, 0.704901, calcDesiredYawRate(steeringAngle, velocityCG), 0.0001);
+    CuAssertDblEquals(tc, 0.704901, calcYawRateRequest(steeringAngle, velocityCG), 0.0001);
 }
 
 
@@ -93,11 +99,11 @@ void calcYawErrorTest(CuTest* tc) {
 
     desiredYawRate = 3.0;
     currYawRate = 2.89;
-    CuAssertDblEquals(tc, 0.11, calcYawError(desiredYawRate, currYawRate), 0.0001);
+    CuAssertDblEquals(tc, 0.11, calcYawError(requestedYawRate, currYawRate), 0.0001);
 
-    desiredYawRate = .7;
+    requestedYawRate = .7;
     currYawRate = 1.257;
-    CuAssertDblEquals(tc, -0.557000, calcYawError(desiredYawRate, currYawRate), 0.0001);
+    CuAssertDblEquals(tc, -0.557000, calcYawError(requestedYawRate, currYawRate), 0.0001);
 }
 
 // --------------------------- Desired Yaw Moment Tests --------------------------------- //
@@ -108,18 +114,28 @@ void calcDesiredYawMomentTest(CuTest* tc) {
     double steeringAngle = -1.5;
     double velocityCG = 25;
     double timestep = 10;
+    force_z_t F;
+    F.force_z_rear_right = 1120.4;
+    F.force_z_rear_left = 1056.3;
 
-    double yawError = calcYawError(desiredYawRate, currYawRate);
-
-    CuAssertDblEquals(tc, 956.898074, calcDesiredYawMoment(yawError, currYawRate, desiredYawRate, prevYawRate, steeringAngle, velocityCG, timestep), 0.0001);
+    double yawError = calcYawError(requestedYawRate, currYawRate);
+    CuAssertDblEquals(tc, 895.583570, calcYawMomentRequest(yawError, currYawRate, requestedYawRate, prevYawRate, steeringAngle, velocityCG, timestep, F), .0001);
 
     velocityCG = 35;
     steeringAngle = 1.27;
     desiredYawRate = 1.92;
     prevYawRate = 1.75;
     currYawRate = 1.82;
-    yawError = calcYawError(desiredYawRate, currYawRate);
-    CuAssertDblEquals(tc, -500.724189, calcDesiredYawMoment(yawError, currYawRate, desiredYawRate, prevYawRate, steeringAngle, velocityCG, timestep), 0.0001);
+    yawError = calcYawError(requestedYawRate, currYawRate);
+    CuAssertDblEquals(tc, -1141.563214, calcYawMomentRequest(yawError, currYawRate, requestedYawRate, prevYawRate, steeringAngle, velocityCG, timestep, F), .0001);
+
+    yawError = 0.5;
+    requestedYawRate = -.49;
+    steeringAngle = -0.0872665;
+    velocityCG = 10;
+    currYawRate = -0.99;
+    
+    CuAssertDblEquals(tc, -225.602588, calcYawMomentRequest(yawError, currYawRate, requestedYawRate, prevYawRate, steeringAngle, velocityCG, timestep, F), .0001);
 }
 
 // --------------------------- Torque Distribution Delta Tests --------------------------------- //
@@ -130,8 +146,11 @@ void calcTorqueDistributionDeltaTest(CuTest* tc) {
     desiredYawMoment = 6415;
     CuAssertDblEquals(tc, 251.797562, calcTorqueDistributionDelta(desiredYawMoment), 0.0001);
 
-    desiredYawMoment = 89.028;
-    CuAssertDblEquals(tc, 3.494471, calcTorqueDistributionDelta(desiredYawMoment), 0.0001);
+    requestedYawMoment = 6415;
+    CuAssertDblEquals(tc, 251.797562, calcTorqueDistributionDelta(requestedYawMoment), 0.0001);
+
+    requestedYawMoment = 89.028;
+    CuAssertDblEquals(tc, 3.494471, calcTorqueDistributionDelta(requestedYawMoment), 0.0001);
 }
 
 // ---------------------------  Desired Torque Tests --------------------------------- //
@@ -158,21 +177,20 @@ void calcDesiredTorqueTest(CuTest* tc) {
     
     A = calcDesiredTorque(steeringAngle, torqueRequest, torqueDelta);
     
-    CuAssertDblEquals(tc, D.desiredTorqueRR, A.desiredTorqueRR, 0.0001);
-    CuAssertDblEquals(tc, D.desiredTorqueRL, A.desiredTorqueRL, 0.0001);
+    CuAssertDblEquals(tc, R.torque_requested_rear_right, A.torque_requested_rear_right, 0.0001);
+    CuAssertDblEquals(tc, R.torque_requested_rear_left, A.torque_requested_rear_left, 0.0001);
 
-     // Test Three
+    // test
     steeringAngle = -0.523599;
     torqueRequest = 142.4;
     torqueDelta = 0.852;
-    D.desiredTorqueRR = 71.626000;
-    D.desiredTorqueRL = 70.774000;
-
-    A = calcDesiredTorque(steeringAngle, torqueRequest, torqueDelta);
-
-    CuAssertDblEquals(tc, D.desiredTorqueRR, A.desiredTorqueRR, 0.0001);
-    CuAssertDblEquals(tc, D.desiredTorqueRL, A.desiredTorqueRL, 0.0001);
-
+    R.torque_requested_rear_right = 71.626000;
+    R.torque_requested_rear_left = 70.774000;
+    
+    A = calcRequestedTorque(steeringAngle, torqueRequest, torqueDelta);
+    
+    CuAssertDblEquals(tc, R.torque_requested_rear_right, A.torque_requested_rear_right, 0.0001);
+    CuAssertDblEquals(tc, R.torque_requested_rear_left, A.torque_requested_rear_left, 0.0001);
 }
 
 // --------------------------- Vertical Load Weight Transfer Tests --------------------------------- //
@@ -180,57 +198,58 @@ void calcVerticalLoadWeightTransferTest(CuTest* tc) {
     // Test One
     double accelerationLongitude = -10;
     double accelerationLatitude = 0;
+    
+    force_z_t expected_Z;
+    expected_Z.force_z_rear_left = 782.845714;
+    expected_Z.force_z_rear_right = 782.845714;
+    expected_Z.force_z_front_left = 984.754286;
+    expected_Z.force_z_front_right = 984.754286;
 
-    force_z_t expectedZ;
-    expectedZ.F_zrl = 782.845714;
-    expectedZ.F_zrr = 782.845714;
-    expectedZ.F_zfl = 984.754286;
-    expectedZ.F_zfr = 984.754286;
+    force_z_t actual_Z = calcVerticalLoadWeightTransfer(accelerationLongitude, accelerationLatitude);
+    CuAssertDblEquals(tc, expected_Z.force_z_rear_left, actual_Z.force_z_rear_left, 0.0001);
+    CuAssertDblEquals(tc, expected_Z.force_z_rear_right, actual_Z.force_z_rear_right, 0.0001);
+    CuAssertDblEquals(tc, expected_Z.force_z_front_left, actual_Z.force_z_front_left, 0.0001);
+    CuAssertDblEquals(tc, expected_Z.force_z_front_right, actual_Z.force_z_front_right, 0.0001);
 
-    force_z_t actualZ = calcVerticalLoadWeightTransfer(accelerationLongitude, accelerationLatitude);
-    CuAssertDblEquals(tc, expectedZ.F_zrl, actualZ.F_zrl, 0.0001);
-    CuAssertDblEquals(tc, expectedZ.F_zrr, actualZ.F_zrr, 0.0001);
-    CuAssertDblEquals(tc, expectedZ.F_zfl, actualZ.F_zfl, 0.0001);
-    CuAssertDblEquals(tc, expectedZ.F_zfr, actualZ.F_zfr, 0.0001);
-
-    // Test Two
+    // test 
     accelerationLongitude = -9;
     accelerationLatitude = 11;
+    
+    expected_Z.force_z_rear_left = 693.037443;
+    expected_Z.force_z_rear_right = 928.196842;
+    expected_Z.force_z_front_left = 844.273326;
+    expected_Z.force_z_front_right = 1069.692388;
 
-    expectedZ.F_zrl = 693.037443;
-    expectedZ.F_zrr = 928.196842;
-    expectedZ.F_zfl = 844.273326;
-    expectedZ.F_zfr = 1069.692388;
+    actual_Z = calcVerticalLoadWeightTransfer(accelerationLongitude, accelerationLatitude);
+    CuAssertDblEquals(tc, expected_Z.force_z_rear_left, actual_Z.force_z_rear_left, 0.0001);
+    CuAssertDblEquals(tc, expected_Z.force_z_rear_right, actual_Z.force_z_rear_right, 0.0001);
+    CuAssertDblEquals(tc, expected_Z.force_z_front_left, actual_Z.force_z_front_left, 0.0001);
+    CuAssertDblEquals(tc, expected_Z.force_z_front_right, actual_Z.force_z_front_right, 0.0001);
 
-    actualZ = calcVerticalLoadWeightTransfer(accelerationLongitude, accelerationLatitude);
-    CuAssertDblEquals(tc, expectedZ.F_zrl, actualZ.F_zrl, 0.0001);
-    CuAssertDblEquals(tc, expectedZ.F_zrr, actualZ.F_zrr, 0.0001);
-    CuAssertDblEquals(tc, expectedZ.F_zfl, actualZ.F_zfl, 0.0001);
-    CuAssertDblEquals(tc, expectedZ.F_zfr, actualZ.F_zfr, 0.0001);
-
-     // Test Three
+    // test
     accelerationLongitude = -10;
     accelerationLatitude = -2;
 
-    expectedZ.F_zrl = 804.223841;
-    expectedZ.F_zrr = 761.467587;
-    expectedZ.F_zfl = 1005.246928;
-    expectedZ.F_zfr = 964.261644;
+    expected_Z.force_z_rear_left = 804.223841;
+    expected_Z.force_z_rear_right = 761.467587;
+    expected_Z.force_z_front_left = 1005.246928;
+    expected_Z.force_z_front_right = 964.261644;
 
-    actualZ = calcVerticalLoadWeightTransfer(accelerationLongitude, accelerationLatitude);
-    CuAssertDblEquals(tc, expectedZ.F_zrl, actualZ.F_zrl, 0.0001);
-    CuAssertDblEquals(tc, expectedZ.F_zrr, actualZ.F_zrr, 0.0001);
-    CuAssertDblEquals(tc, expectedZ.F_zfl, actualZ.F_zfl, 0.0001);
-    CuAssertDblEquals(tc, expectedZ.F_zfr, actualZ.F_zfr, 0.0001);
+    actual_Z = calcVerticalLoadWeightTransfer(accelerationLongitude, accelerationLatitude);
 
-    // Test Four
+    CuAssertDblEquals(tc, expected_Z.force_z_rear_left, actual_Z.force_z_rear_left, 0.0001);
+    CuAssertDblEquals(tc, expected_Z.force_z_rear_right, actual_Z.force_z_rear_right, 0.0001);
+    CuAssertDblEquals(tc, expected_Z.force_z_front_left, actual_Z.force_z_front_left, 0.0001);
+    CuAssertDblEquals(tc, expected_Z.force_z_front_right, actual_Z.force_z_front_right, 0.0001);
+
+    // Test
     accelerationLongitude = 7;
     accelerationLatitude = 4;
 
-    expectedZ.F_zrl = 1212.203746;
-    expectedZ.F_zrr = 1297.716254;
-    expectedZ.F_zfl = 471.654716;
-    expectedZ.F_zfr = 553.625284;
+    expected_Z.force_z_rear_left = 1212.203746;
+    expected_Z.force_z_rear_right = 1297.716254;
+    expected_Z.force_z_front_left = 471.654716;
+    expected_Z.force_z_front_right = 553.625284;
 
     actualZ = calcVerticalLoadWeightTransfer(accelerationLongitude, accelerationLatitude);
     CuAssertDblEquals(tc, expectedZ.F_zrl, actualZ.F_zrl, 0.0001);
@@ -251,11 +270,11 @@ void calcLateralForcesTest(CuTest* tc) {
 
     force_y_t actualY = calcLateralForces(accelerationLatitude, Z);
 
-    force_y_t expectedY;
-    expectedY.F_yrl = -159.454652;
-    expectedY.F_yrr = -159.423439;
-    expectedY.F_yfl = -200.575915;
-    expectedY.F_yfr = -200.545994;
+    force_y_t expected_Y;
+    expected_Y.force_y_rear_left = 159.454652;
+    expected_Y.force_y_rear_right = 159.423439;
+    expected_Y.force_y_front_left = 200.575915;
+    expected_Y.force_y_front_right = 200.545994;
 
     CuAssertDblEquals(tc, expectedY.F_yrl, actualY.F_yrl, 0.0001);
     CuAssertDblEquals(tc, expectedY.F_yrr, actualY.F_yrr, 0.0001);
@@ -285,10 +304,31 @@ void calcLateralForcesTest(CuTest* tc) {
     // Test Three
     accelerationLatitude = 11;
 
-    Z.F_zrl = 693.037443;
-    Z.F_zrr = 928.196842;
-    Z.F_zfl = 844.273326;
-    Z.F_zfr = 1069.692388;
+    expected_Y.force_y_rear_left = -932.799309;
+    expected_Y.force_y_rear_right = -933.027167;
+    expected_Y.force_y_front_left = -380.977552;
+    expected_Y.force_y_front_right = -381.195972;
+
+    CuAssertDblEquals(tc, expected_Y.force_y_rear_left, actual_Y.force_y_rear_left, 0.0001);
+    CuAssertDblEquals(tc, expected_Y.force_y_rear_right, actual_Y.force_y_rear_right, 0.0001);
+    CuAssertDblEquals(tc, expected_Y.force_y_front_left, actual_Y.force_y_front_left, 0.0001);
+    CuAssertDblEquals(tc, expected_Y.force_y_front_right, actual_Y.force_y_front_right, 0.0001);
+
+
+    // test three
+    accelerationLatitude = 11;
+
+    Z.force_z_rear_left = 693.037443;
+    Z.force_z_rear_right = 928.196842;
+    Z.force_z_front_left = 844.273326;
+    Z.force_z_front_right = 1069.692388;
+
+    actual_Y = calcLateralForces(accelerationLatitude, Z);
+
+    expected_Y.force_y_rear_left = -776.314855;
+    expected_Y.force_y_rear_right = -1039.731697;
+    expected_Y.force_y_front_left = -945.723685;
+    expected_Y.force_y_front_right = -1198.229763;
 
     actualY = calcLateralForces(accelerationLatitude, Z);
 
@@ -313,14 +353,14 @@ void calcTractionLimitTorqueTest(CuTest* tc) {
     Y.F_yfr = -200.545994;
 
     force_z_t Z;
-    Z.F_zrl = 782.922343;
-    Z.F_zrr = 782.769085;
-    Z.F_zfl = 984.827741;
-    Z.F_zfr = 984.680831;
+    Z.force_z_rear_left = 782.922343;
+    Z.force_z_rear_right = 782.769085;
+    Z.force_z_front_left = 984.827741;
+    Z.force_z_front_right = 984.680831;
 
-    torque_max_t expectedTMax;
-    expectedTMax.maxTorqueRL = 67.425868;
-    expectedTMax.maxTorqueRR = 67.412670;
+    torque_max_t expected_TMax;
+    expected_TMax.torque_max_rear_left = 67.425868;
+    expected_TMax.torque_max_rear_right = 67.412670;
     
     torque_max_t actualTMax = calcTractionLimitTorque(Y, Z);
 
@@ -328,33 +368,33 @@ void calcTractionLimitTorqueTest(CuTest* tc) {
     CuAssertDblEquals(tc, expectedTMax.maxTorqueRR, actualTMax.maxTorqueRR, 0.0001);
 
     // Test Two
-    Y.F_yrl = 932.799309;
-    Y.F_yrr = 933.027167;
-    Y.F_yfl = 380.977552;
-    Y.F_yfr = 381.195972;
+    Y.force_y_rear_left = 932.799309;
+    Y.force_y_rear_right = 933.027167;
+    Y.force_y_front_left = 380.977552;
+    Y.force_y_front_right = 381.195972;
 
-    Z.F_zrl = 1254.806742;
-    Z.F_zrr = 1255.113258;
-    Z.F_zfl = 512.493090;
-    Z.F_zfr = 512.786910;
+    Z.force_z_rear_left = 1254.806742;
+    Z.force_z_rear_right = 1255.113258;
+    Z.force_z_front_left = 512.493090;
+    Z.force_z_front_right = 512.786910;
 
-    expectedTMax.maxTorqueRL = 97.890416;
-    expectedTMax.maxTorqueRR = 97.914328;
+    expected_TMax.torque_max_rear_left = 97.890416;
+    expected_TMax.torque_max_rear_right = 97.914328;
     
-    actualTMax = calcTractionLimitTorque(Y, Z);
+    actual_TMax = calcTractionLimitTorque(Y, Z);
 
-    CuAssertDblEquals(tc, expectedTMax.maxTorqueRL, actualTMax.maxTorqueRL, 0.0001);
-    CuAssertDblEquals(tc, expectedTMax.maxTorqueRR, actualTMax.maxTorqueRR, 0.0001);
+    CuAssertDblEquals(tc, expected_TMax.torque_max_rear_left, actual_TMax.torque_max_rear_left, 0.0001);
+    CuAssertDblEquals(tc, expected_TMax.torque_max_rear_right, actual_TMax.torque_max_rear_right, 0.0001);
 
-    // Test Three
-    Y.F_yrl = 776.31;
-    Y.F_yrr = 1039.7;
+    // test
+    Y.force_y_rear_left = 776.31;
+    Y.force_y_rear_right = 1039.7;
 
-    Z.F_zrl = 693.04;
-    Z.F_zrr = 928.2;
+    Z.force_z_rear_left = 693.04;
+    Z.force_z_rear_right = 928.2;
 
-    expectedTMax.maxTorqueRL = 45.222015;
-    expectedTMax.maxTorqueRR = 60.567710;
+    expected_TMax.torque_max_rear_left = 45.222015;
+    expected_TMax.torque_max_rear_right = 60.567710;
     
     actualTMax = calcTractionLimitTorque(Y, Z);
 
@@ -364,49 +404,37 @@ void calcTractionLimitTorqueTest(CuTest* tc) {
 
 // --------------------------- Traction Limit Check Tests --------------------------------- //
 void checkTractionLimitTest(CuTest* tc) {
-    torque_desired_t D;
-    D.desiredTorqueRR = 10;
-    D.desiredTorqueRL = 10;
+    torque_requested_t R;
+    R.torque_requested_rear_right = 10;
+    R.torque_requested_rear_left = 10;
 
     torque_max_t M;
-    M.maxTorqueRR = 20;
-    M.maxTorqueRL = 20;
+    M.torque_max_rear_right = 20;
+    M.torque_max_rear_left = 20;
 
-    torque_new_t expectedNewT;
-    expectedNewT.newTorqueRR = 10;
-    expectedNewT.newTorqueRL = 10;
+    torque_corrected_t expected_newT;
+    expected_newT.torque_corrected_rear_right = 10;
+    expected_newT.torque_corrected_rear_left = 10;
 
-    torque_new_t actualNewT = checkTractionLimit(D, M);
-    CuAssertDblEquals(tc, expectedNewT.newTorqueRR, actualNewT.newTorqueRR, 0.0001);
-    CuAssertDblEquals(tc, expectedNewT.newTorqueRL, actualNewT.newTorqueRL, 0.0001);
+    double torqueLimitBatteryState = 180;
 
-    // Test Two
-    D.desiredTorqueRR = 20;
-    D.desiredTorqueRL = 28;
+    torque_corrected_t actual_newT = checkTractionLimit(R, M, torqueLimitBatteryState);
+    CuAssertDblEquals(tc, expected_newT.torque_corrected_rear_right, actual_newT.torque_corrected_rear_right, 0.0001);
+    CuAssertDblEquals(tc, expected_newT.torque_corrected_rear_left, actual_newT.torque_corrected_rear_left, 0.0001);
 
-    M.maxTorqueRR = 25;
-    M.maxTorqueRL = 25;
+    // test 2
+    R.torque_requested_rear_right = 20;
+    R.torque_requested_rear_left = 28;
 
-    expectedNewT.newTorqueRR = 17;
-    expectedNewT.newTorqueRL = 25;
+    M.torque_max_rear_right = 25;
+    M.torque_max_rear_left = 25;
 
-    actualNewT = checkTractionLimit(D, M);
-    CuAssertDblEquals(tc, expectedNewT.newTorqueRR, actualNewT.newTorqueRR, 0.0001);
-    CuAssertDblEquals(tc, expectedNewT.newTorqueRL, actualNewT.newTorqueRL, 0.0001);
+    expected_newT.torque_corrected_rear_right = 14.500000;
+    expected_newT.torque_corrected_rear_left = 22.500000;
 
-    // Test Three
-    D.desiredTorqueRR = -8;
-    D.desiredTorqueRL = -2;
-
-    M.maxTorqueRR = 3;
-    M.maxTorqueRL = 3;
-
-    expectedNewT.newTorqueRR = -3;
-    expectedNewT.newTorqueRL = -3;
-
-    actualNewT = checkTractionLimit(D, M);
-    CuAssertDblEquals(tc, expectedNewT.newTorqueRR, actualNewT.newTorqueRR, 0.0001);
-    CuAssertDblEquals(tc, expectedNewT.newTorqueRL, actualNewT.newTorqueRL, 0.0001);
+    actual_newT = checkTractionLimit(R, M, torqueLimitBatteryState);
+    CuAssertDblEquals(tc, expected_newT.torque_corrected_rear_right, actual_newT.torque_corrected_rear_right, 0.0001);
+    CuAssertDblEquals(tc, expected_newT.torque_corrected_rear_left, actual_newT.torque_corrected_rear_left, 0.0001);
 }
 
 CuSuite* TorqueVectoringGetSuite(void) {
