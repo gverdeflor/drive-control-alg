@@ -13,6 +13,7 @@
 
 #include <stdio.h>
 #include <math.h>
+#include <stdbool.h>
 #include "torque_vectoring.h"
 
 #define maxTorque   178                                                     // Nm (89 Nm for EMRAX 188 MV motor)
@@ -51,34 +52,38 @@
  * 
  * returns: requested torque as % of the maximum available torque
  */
-double calcTorqueRequest(double throttlePosition, double velocityCG) {
+double calcTorqueRequest(double throttlePosition, double velocityCG, bool endurance_bool) {
     double requestedTorque;
     requestedTorque = maxTorque * (throttlePosition / 100);
 
     if (requestedTorque == 0) {
-        double targetA = 2;
+        if (endurance_bool) {
+            double targetA = 2;
 
-        double maxP = 15.2384;
-        double dragCoeff = .6;
-        double airDensityCoeff = 1.225;
-        double frontalAreaOfCar = .4;
-        double dragForce = ((.5 * dragCoeff * airDensityCoeff * frontalAreaOfCar) * pow(velocityCG, 2));
-        double rollingForce = 88.24;
-        double motorRPM = 60 * velocityCG / (2 * M_PI * r) * G;
-        double rpmCoversion = 9.5492965964254;
-        double motorRadSec = motorRPM / rpmCoversion;
+            double maxP = 15.2384;
+            double dragCoeff = .6;
+            double airDensityCoeff = 1.225;
+            double frontalAreaOfCar = .4;
+            double dragForce = ((.5 * dragCoeff * airDensityCoeff * frontalAreaOfCar) * pow(velocityCG, 2));
+            double rollingForce = 88.24;
+            double motorRPM = 60 * velocityCG / (2 * M_PI * r) * G;
+            double rpmCoversion = 9.5492965964254;
+            double motorRadSec = motorRPM / rpmCoversion;
 
-        double forceDueToMotor = (1 - exp(- velocityCG / .8)) * ((targetA * mass) - dragForce - rollingForce);
-        double torqueAtWheel = r * forceDueToMotor;
+            double forceDueToMotor = (1 - exp(- velocityCG / .8)) * ((targetA * mass) - dragForce - rollingForce);
+            double torqueAtWheel = r * forceDueToMotor;
 
-        double torqueAtMotor;
-        if (((torqueAtWheel / (G * .94)) * motorRadSec) < (maxP * 1000)) {
-            torqueAtMotor = torqueAtWheel / (G * .94);
+            double torqueAtMotor;
+            if (((torqueAtWheel / (G * .94)) * motorRadSec) < (maxP * 1000)) {
+                torqueAtMotor = torqueAtWheel / (G * .94);
+            } else {
+                torqueAtMotor = 1000 * maxP / motorRadSec;
+            }
+
+            requestedTorque = - torqueAtMotor;
         } else {
-            torqueAtMotor = 1000 * maxP / motorRadSec;
+            requestedTorque = -10;
         }
-
-        requestedTorque = - torqueAtMotor;
     }
     return requestedTorque;
 }
@@ -157,25 +162,25 @@ double calcYawError(double desiredYawRate, double currentYawRate) {
  *
  * returns: difference between the desired rate and the current rate
  */
-double calcYawMomentRequest(double yawError, double currentYawRate, double requestedYawRate, double prevYawRate, double steeringAngle, double velocityCG, double timestep) {
+double calcYawMomentRequest(double yawError, double currentYawRate, double requestedYawRate, double prevYawRate, double steeringAngle, double velocityCG, double timestep, force_z_t F) {
     double sideSlipAngleCoeff = c_f * l_f - c_r * l_r;
     double yawRateOverVxCoeff = c_f * pow(l_f, 2) + c_r * pow(l_f, 2);
     double steeringAngleCoeff = c_f * l_f;
-    double eta = 1.1;
+    double eta = 2;
 
     double turnRadius = calcTurnRadius(steeringAngle);
-    double beta = 57.3 * l_r / turnRadius - r * pow(velocityCG, 2) / (K_r * grav * turnRadius) ;
-    // printf("%f", beta);
-    double requestedYawRateDerivative = (requestedYawRate - prevYawRate) / timestep;
-    // double requestedYawRateDerivative = .174;
+    double signofSteeringAngle = (steeringAngle > 0) - (steeringAngle < 0);
+    double beta = signofSteeringAngle * (57.3 * l_r / turnRadius - (F.force_z_rear_right + F.force_z_rear_left) * pow(velocityCG, 2) / (c_r * grav * turnRadius));
+    
+    double requestedYawRateDerivative = .174;
 
     double derivTerm = I_z * requestedYawRateDerivative;
     double sideslipTerm = sideSlipAngleCoeff * beta / 57.3; // beta in radians
     double yawOverVxTerm = yawRateOverVxCoeff * currentYawRate / velocityCG;
-    double steeringAngleTerm = steeringAngleCoeff * steeringAngle; // radians
+    double steeringAngleTerm = (steeringAngleCoeff / 57.3) * steeringAngle; // radians
     double yawErrorTerm = eta * I_z * yawError;
 
-    double desiredYawMoment = derivTerm + sideslipTerm + yawOverVxTerm - steeringAngleTerm + yawErrorTerm;
+    double desiredYawMoment = derivTerm + sideslipTerm + yawOverVxTerm - steeringAngleTerm - yawErrorTerm;
 
     return desiredYawMoment;
 }
@@ -258,10 +263,10 @@ force_z_t calcVerticalLoadWeightTransfer(double accelerationLongitude, double ac
  */
 force_y_t calcLateralForces(double accelerationLatitude, force_z_t Z) {
     force_y_t Y;
-    Y.force_y_front_right = (Z.force_z_front_right / grav) * accelerationLatitude;
-    Y.force_y_front_left = (Z.force_z_front_left / grav) * accelerationLatitude;
-    Y.force_y_rear_right = (Z.force_z_rear_right / grav) * accelerationLatitude;
-    Y.force_y_rear_left = (Z.force_z_rear_left / grav) * accelerationLatitude;
+    Y.force_y_front_right = (Z.force_z_front_right / grav) * (-accelerationLatitude);
+    Y.force_y_front_left = (Z.force_z_front_left / grav) * (-accelerationLatitude);
+    Y.force_y_rear_right = (Z.force_z_rear_right / grav) * (-accelerationLatitude);
+    Y.force_y_rear_left = (Z.force_z_rear_left / grav) * (-accelerationLatitude);
 
     return Y;
 }
@@ -294,34 +299,20 @@ torque_max_t calcTractionLimitTorque(force_y_t Y, force_z_t Z) {
  * 
  * returns: struct with the new torques
  */
-torque_corrected_t checkTractionLimit(torque_requested_t R, torque_max_t M) {
+torque_corrected_t checkTractionLimit(torque_requested_t R, torque_max_t M, double torqueLimitBatteryState) {
     torque_corrected_t C;
     double newTorqueRR;
     double newTorqueRL;
 
     if (R.torque_requested_rear_right >= 0 && R.torque_requested_rear_left >= 0) {
 
-        if (M.torque_max_rear_right > R.torque_requested_rear_right) {
-            if (M.torque_max_rear_left > R.torque_requested_rear_left) {
-                newTorqueRR = R.torque_requested_rear_right;
-                newTorqueRL = R.torque_requested_rear_left;
-            } else {
-                double Tdiff = fmax(R.torque_requested_rear_right - M.torque_max_rear_right, R.torque_requested_rear_left - M.torque_max_rear_left);
-                newTorqueRR = R.torque_requested_rear_right - Tdiff;
-                newTorqueRL = R.torque_requested_rear_left - Tdiff;
-            }
+        if ((.9 * M.torque_max_rear_right > R.torque_requested_rear_right) && (.9 * M.torque_max_rear_left > R.torque_requested_rear_left)) {
+            newTorqueRR = R.torque_requested_rear_right;
+            newTorqueRL = R.torque_requested_rear_left;
         } else {
-            double Tdiff = fmax(R.torque_requested_rear_right - M.torque_max_rear_right,R.torque_requested_rear_left - M.torque_max_rear_left);
-            newTorqueRR = R.torque_requested_rear_right - Tdiff;
-            newTorqueRL = R.torque_requested_rear_left - Tdiff;
-        }
-
-        if (-newTorqueRL > M.torque_max_rear_left) {
-            newTorqueRL = -M.torque_max_rear_left;
-        }
-
-        if (-newTorqueRR > M.torque_max_rear_right) {
-            newTorqueRR = -M.torque_max_rear_right;
+            double Tdiff = fmax(R.torque_requested_rear_right - .9 * M.torque_max_rear_right, R.torque_requested_rear_left -.9 * M.torque_max_rear_left);
+            newTorqueRR = fmax(-.9 * M.torque_max_rear_right, R.torque_requested_rear_right - Tdiff);
+            newTorqueRL = fmax(-.9 * M.torque_max_rear_left, R.torque_requested_rear_left - Tdiff);
         }
     } else if (R.torque_requested_rear_right >= 0 && R.torque_requested_rear_left < 0) {
         if(M.torque_max_rear_right > R.torque_requested_rear_right) {
@@ -366,20 +357,15 @@ torque_corrected_t checkTractionLimit(torque_requested_t R, torque_max_t M) {
             newTorqueRR = fmax(newTorqueRR - diff, -M.torque_max_rear_right);
         }
     } else if (R.torque_requested_rear_right < 0 && R.torque_requested_rear_left < 0) {
-        if (-M.torque_max_rear_left < R.torque_requested_rear_left) {
-            if (-M.torque_max_rear_right < R.torque_requested_rear_right) {
-                newTorqueRR = R.torque_requested_rear_right;
-                newTorqueRL = R.torque_requested_rear_left;
-            } else {
-                double Tdiff = -R.torque_requested_rear_right - M.torque_max_rear_right;
-                newTorqueRR = fmin(0,R.torque_requested_rear_right + Tdiff);
-                newTorqueRL = fmax(-M.torque_max_rear_left, R.torque_requested_rear_left - Tdiff);
-            }
+        if ((-.9* M.torque_max_rear_left < R.torque_requested_rear_left) && (-.9*M.torque_max_rear_right<R.torque_requested_rear_right)) {
+            newTorqueRR = R.torque_requested_rear_right;
+            newTorqueRL = R.torque_requested_rear_left;
         } else {
-            double Tdiff = -R.torque_requested_rear_left - M.torque_max_rear_left;
-            newTorqueRR = fmax(-M.torque_max_rear_right, R.torque_requested_rear_right - Tdiff);
+            double Tdiff = fmax(-R.torque_requested_rear_left - .9 * M.torque_max_rear_left, -R.torque_requested_rear_right < M.torque_max_rear_right);
+            newTorqueRR = fmin(0, R.torque_requested_rear_right + Tdiff);
             newTorqueRL = fmin(0, R.torque_requested_rear_left + Tdiff);
         }
+
     }
 
     if (newTorqueRR > maxTorque / 2) {
@@ -426,6 +412,11 @@ torque_corrected_t checkTractionLimit(torque_requested_t R, torque_max_t M) {
         }
     }
 
+    if (torqueLimitBatteryState < newTorqueRR + newTorqueRL) {
+        double diff = torqueLimitBatteryState - (newTorqueRR + newTorqueRL);
+        newTorqueRL = newTorqueRL - .5 * diff;
+        newTorqueRR = newTorqueRR - .5 * diff;
+    }
 
     C.torque_corrected_rear_left = newTorqueRL;
     C.torque_corrected_rear_right = newTorqueRR;

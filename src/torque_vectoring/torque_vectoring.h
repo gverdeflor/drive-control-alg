@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include <math.h>
+#include <stdbool.h>
 
 typedef struct force_z {
     double force_z_rear_left;
@@ -40,7 +41,7 @@ typedef struct torque_corrected {
 /* 
  * calculates torque request based on throttle position and max torque
  */
-double calcTorqueRequest(double throttlePosition, double velocityCG);
+double calcTorqueRequest(double throttlePosition, double velocityCG, bool endurance_bool);
 
 /* 
  * calculates turn radius based on steering angle 
@@ -60,7 +61,7 @@ double calcYawError(double requestedYawRate, double currYawRate);
 /* 
  * calculates yaw moment request based on yaw error, yaw rates, steering angle, and velocity of center of gravity  
  */
-double calcYawMomentRequest(double yawError, double currYawRate, double requestedYawRate, double prevYawRate, double steeringAngle, double velocityCG, double timestep);
+double calcYawMomentRequest(double yawError, double currYawRate, double requestedYawRate, double prevYawRate, double steeringAngle, double velocityCG, double timestep, force_z_t F);
 
 /* 
  * calculates torque distribution delta based on requested yaw moment
@@ -90,4 +91,4 @@ torque_max_t calcTractionLimitTorque(force_y_t forces_y, force_z_t forces_z);
 /* 
  *  calculates traction limit torque based on requested torque and maximum torque
  */
-torque_corrected_t checkTractionLimit(torque_requested_t requestedTorque, torque_max_t torqueMax);
+torque_corrected_t checkTractionLimit(torque_requested_t requestedTorque, torque_max_t torqueMax, double torqueLimitBatteryState);
