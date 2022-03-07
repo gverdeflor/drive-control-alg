@@ -17,10 +17,10 @@
 #include "torque_vectoring.h"
 
 #define maxTorque   178                                                     // Nm (89 Nm for EMRAX 188 MV motor)
-#define carWeight   0.6                                                     // % weight in the rear (estimated)
+#define weightDist   0.6                                                    // % weight in the rear (estimated)
 #define L           1.75                                                    // m - wheel base to wheel base length
-#define l_r         (1 - carWeight) * L                                     // m - length from CG to rear
-#define l_f         (carWeight) * L                                         // m - length from CG to front
+#define l_r         (1 - weightDist) * L                                    // m - length from CG to rear
+#define l_f         (weightDist) * L                                        // m - length from CG to front
 #define mass        360                                                     // 360 kg - estimated from previous car
 #define c_f         529                                                     // N/deg - cornerning stiffness (front) - estimated from similar SAE car --> needs to be converted to radians
 #define c_r         633                                                     // N/deg - cornering stiffness (rear) - estimated from similar SAE car --> needs to be converted to radians
@@ -102,14 +102,14 @@ double calcTurnRadius(double steeringAngle) {
     if (steeringAngle != 0) {
         turnRadius = sqrt(pow(t_f/4, 2) + (pow(L, 2) * pow(1 / tan(steeringAngle), 2)));
     } else {
-        turnRadius = sqrt(pow(t_f/4, 2) + (pow(L, 2) * pow(1 / tan(steeringAngle + .000001), 2)));
+        turnRadius = sqrt(pow(t_f/4, 2) + (pow(L, 2) * pow(1 / tan(steeringAngle + 0.000001), 2)));
     }
 
     return turnRadius;
 }
 
 /*
- * Function: calcYawRateRequest
+ * Function: calcDesiredYawRate
  * ---------------------------------
  * calculates the yaw rate request based on steering angle and velocity of the center of gravity
  * 
@@ -118,7 +118,7 @@ double calcTurnRadius(double steeringAngle) {
  *
  * returns: desired yaw rate
  */
-double calcYawRateRequest(double steeringAngle, double velocityCG) {
+double calcDesiredYawRate(double steeringAngle, double velocityCG) {
     double desiredYawRate;
     double turnRadius = calcTurnRadius(steeringAngle);
 
@@ -141,14 +141,14 @@ double calcYawRateRequest(double steeringAngle, double velocityCG) {
  *
  * returns: difference between desired yaw rate and current yaw rate
  */
-double calcYawError(double desiredYawRate, double currentYawRate) {
-    double yawError = desiredYawRate - currentYawRate;
+double calcYawError(double desiredYawRate, double currYawRate) {
+    double yawError = desiredYawRate - currYawRate;
     return yawError;
 }
 
 
 /*
- * Function: calcYawMomentRequest
+ * Function: calcDesiredYawMoment
  * -----------------------------------
  * calculates the yaw moment request based on the yaw error, yaw rates, steering angle, and velocity of center of gravity 
  * 
@@ -185,6 +185,7 @@ double calcYawMomentRequest(double yawError, double currentYawRate, double reque
     return desiredYawMoment;
 }
 
+
 /*
  * Function: calcTorqueDistributionDelta
  * ------------------------------------------
@@ -201,7 +202,7 @@ double calcTorqueDistributionDelta(double desiredYawMoment) {
 }
 
 /*
- * Function: calcRequestedTorque
+ * Function: calcDesiredTorque
  * --------------------------------
  * calculates the desired torque based off of the torque request, steering angle, and the torque delta
  * 
@@ -211,24 +212,25 @@ double calcTorqueDistributionDelta(double desiredYawMoment) {
  * 
  * returns: desired torque
  */
-torque_requested_t calcRequestedTorque(double steeringAngle, double torqueRequest, double torqueDelta) {
-    torque_requested_t requestedTorque;
-    double requestedTorqueRR;
-    double requestedTorqueRL;
+torque_desired_t calcDesiredTorque(double steeringAngle, double torqueRequest, double torqueDelta) {
+    torque_desired_t D;
+    double desiredTorqueRR;
+    double desiredTorqueRL;
 
     if (steeringAngle < 0) {
-        requestedTorqueRR = 0.5 * (torqueRequest + torqueDelta);
-        requestedTorqueRL = 0.5 * (torqueRequest - torqueDelta);
+        desiredTorqueRR = 0.5 * (torqueRequest + torqueDelta);
+        desiredTorqueRL = 0.5 * (torqueRequest - torqueDelta);
     } else {
-        requestedTorqueRR = 0.5 * (torqueRequest - torqueDelta);
-        requestedTorqueRL = 0.5 * (torqueRequest + torqueDelta);
+        desiredTorqueRR = 0.5 * (torqueRequest - torqueDelta);
+        desiredTorqueRL = 0.5 * (torqueRequest + torqueDelta);
     }
 
-    requestedTorque.torque_requested_rear_right = requestedTorqueRR;
-    requestedTorque.torque_requested_rear_left = requestedTorqueRL;
+    D.desiredTorqueRR = desiredTorqueRR;
+    D.desiredTorqueRL = desiredTorqueRL;
 
-    return requestedTorque;
+    return D;
 }
+
 
 /*
  * Function: calcVerticalLoadWeightTransfer
@@ -241,14 +243,14 @@ torque_requested_t calcRequestedTorque(double steeringAngle, double torqueReques
  * returns: struct with the four z forces
  */
 force_z_t calcVerticalLoadWeightTransfer(double accelerationLongitude, double accelerationLatitude) {
-    force_z_t F;
-    F.force_z_rear_left = (0.5 * mass * grav * l_f / L) - (p_r * accelerationLatitude * mass * heightCG / t_r) + (.5 * accelerationLongitude * mass * heightCG / L);
-    F.force_z_rear_right = (0.5 * mass * grav * l_f / L) + (p_r * accelerationLatitude * mass * heightCG / t_r) + (.5 * accelerationLongitude * mass * heightCG / L);
+    force_z_t Z;
+    Z.F_zrl = (0.5 * mass * grav * l_f / L) - (p_r * accelerationLatitude * mass * heightCG / t_r) + (0.5 * accelerationLongitude * mass * heightCG / L);
+    Z.F_zrr = (0.5 * mass * grav * l_f / L) + (p_r * accelerationLatitude * mass * heightCG / t_r) + (0.5 * accelerationLongitude * mass * heightCG / L);
 
-    F.force_z_front_left = (0.5 * mass * grav * l_r / L) - (p_f * accelerationLatitude * mass * heightCG / t_r) - (.5 * accelerationLongitude * mass * heightCG / L);
-    F.force_z_front_right = (0.5 * mass * grav * l_r / L) + (p_f * accelerationLatitude * mass * heightCG / t_r) - (.5 * accelerationLongitude * mass * heightCG / L);
+    Z.F_zfl = (0.5 * mass * grav * l_r / L) - (p_f * accelerationLatitude * mass * heightCG / t_r) - (0.5 * accelerationLongitude * mass * heightCG / L);
+    Z.F_zfr = (0.5 * mass * grav * l_r / L) + (p_f * accelerationLatitude * mass * heightCG / t_r) - (0.5 * accelerationLongitude * mass * heightCG / L);
 
-    return F;
+    return Z;
 }
 
 /*
@@ -267,7 +269,7 @@ force_y_t calcLateralForces(double accelerationLatitude, force_z_t Z) {
     Y.force_y_front_left = (Z.force_z_front_left / grav) * (-accelerationLatitude);
     Y.force_y_rear_right = (Z.force_z_rear_right / grav) * (-accelerationLatitude);
     Y.force_y_rear_left = (Z.force_z_rear_left / grav) * (-accelerationLatitude);
-
+ 
     return Y;
 }
 
@@ -286,15 +288,14 @@ torque_max_t calcTractionLimitTorque(force_y_t Y, force_z_t Z) {
     T.torque_max_rear_left = (r * sqrt(pow(mu * Z.force_z_rear_left, 2.0) - pow(Y.force_y_rear_left, 2.0))) / G;
     T.torque_max_rear_right = (r * sqrt(pow(mu * Z.force_z_rear_right, 2.0) - pow(Y.force_y_rear_right, 2.0))) / G;
 
-    return T;
+    return M;
 }
-
 /*
  * Function: checkTractionLimit
  * --------------------------------------
  * calculates the traction limit torque
  * 
- *      R: requested torque struct from calculated desired torque from 
+ *      D: requested torque struct from calculated desired torque from 
  *      M: max traction limit torques struct from traction limit torque method
  * 
  * returns: struct with the new torques
@@ -365,7 +366,6 @@ torque_corrected_t checkTractionLimit(torque_requested_t R, torque_max_t M, doub
             newTorqueRR = fmin(0, R.torque_requested_rear_right + Tdiff);
             newTorqueRL = fmin(0, R.torque_requested_rear_left + Tdiff);
         }
-
     }
 
     if (newTorqueRR > maxTorque / 2) {
@@ -421,5 +421,5 @@ torque_corrected_t checkTractionLimit(torque_requested_t R, torque_max_t M, doub
     C.torque_corrected_rear_left = newTorqueRL;
     C.torque_corrected_rear_right = newTorqueRR;
 
-    return C;
+    return N;
 }

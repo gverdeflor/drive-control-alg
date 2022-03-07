@@ -2,7 +2,7 @@ CC = gcc
 CFLAGS = -Wall
 OBJS = test_torque_vectoring_all.o CuTest.o test_torque_vectoring.o torque_vectoring.o
 
-test_torque_vectoring_all: $(OBJS)
+torque: $(OBJS)
 	$(CC) $(CFLAGS) $(OBJS) -o test_torque_vectoring.exe -lm
 
 test_torque_vectoring_all.o: test_torque_vectoring_all.c
